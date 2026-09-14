@@ -6,14 +6,20 @@ public class DomainErrorFilter : IErrorFilter
 {
     public IError OnError(IError error) => error.Exception switch
     {
-        UnauthorizedAccessException => Expose(error, "FORBIDDEN"),
-        InvalidOperationException or ArgumentException => Expose(error, "INVALID_INPUT"),
+        UnauthorizedAccessException exception => Expose(error, exception.Message, "FORBIDDEN"),
+        ArgumentException exception => Expose(error, WithoutParameterName(exception), "INVALID_INPUT"),
+        InvalidOperationException exception => Expose(error, exception.Message, "INVALID_INPUT"),
         _ => error
     };
 
-    private static IError Expose(IError error, string code) =>
+    private static string WithoutParameterName(ArgumentException exception) =>
+        exception.ParamName is null
+            ? exception.Message
+            : exception.Message.Replace($" (Parameter '{exception.ParamName}')", string.Empty);
+
+    private static IError Expose(IError error, string message, string code) =>
         ErrorBuilder.FromError(error)
-            .SetMessage(error.Exception!.Message)
+            .SetMessage(message)
             .SetException(null)
             .SetCode(code)
             .Build();
