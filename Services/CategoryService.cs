@@ -7,17 +7,10 @@ using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class CategoryService : ICategoryService
+public class CategoryService(AppDbContext dbContext) : ICategoryService
 {
-    private readonly AppDbContext _dbContext;
-
-    public CategoryService(AppDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
     public IQueryable<CategoryDto> Query() =>
-        _dbContext.Categories.Select(CategoryDto.Projection);
+        dbContext.Categories.Select(CategoryDto.Projection);
 
     public Task<CategoryDto?> GetCategoryByIdAsync(Guid id, CancellationToken ct = default) =>
         Query().FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -26,7 +19,7 @@ public class CategoryService : ICategoryService
     {
         var category = new Category(dto.Name);
 
-        _dbContext.Categories.Add(category);
+        dbContext.Categories.Add(category);
         await SaveAsync(ct);
 
         return CategoryDto.FromEntity(category);
@@ -35,7 +28,7 @@ public class CategoryService : ICategoryService
     public async Task<CategoryDto?> UpdateCategoryAsync(
         Guid id, UpdateCategoryDto dto, CancellationToken ct = default)
     {
-        var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var category = await dbContext.Categories.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (category is null)
         {
             return null;
@@ -49,23 +42,23 @@ public class CategoryService : ICategoryService
 
     public async Task<bool> DeleteCategoryAsync(Guid id, CancellationToken ct = default)
     {
-        var category = await _dbContext.Categories.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var category = await dbContext.Categories.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (category is null)
         {
             return false;
         }
 
-        var hasProducts = await _dbContext.Products.AnyAsync(x => x.CategoryId == id, ct);
+        var hasProducts = await dbContext.Products.AnyAsync(x => x.CategoryId == id, ct);
         if (hasProducts)
         {
             throw new InvalidOperationException(HasProductsMessage(id));
         }
 
-        _dbContext.Categories.Remove(category);
+        dbContext.Categories.Remove(category);
 
         try
         {
-            await _dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
             when (ex.InnerException is PostgresException { SqlState: "23503" })
@@ -80,7 +73,7 @@ public class CategoryService : ICategoryService
     {
         try
         {
-            await _dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
             when (ex.InnerException is PostgresException { SqlState: "23505" })

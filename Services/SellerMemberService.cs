@@ -6,21 +6,14 @@ using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class SellerMemberService : ISellerMemberService
+public class SellerMemberService(
+    AppDbContext dbContext,
+    ISellerAccessService sellerAccess) : ISellerMemberService
 {
-    private readonly AppDbContext _dbContext;
-    private readonly ISellerAccessService _sellerAccess;
-
-    public SellerMemberService(AppDbContext dbContext, ISellerAccessService sellerAccess)
-    {
-        _dbContext = dbContext;
-        _sellerAccess = sellerAccess;
-    }
-
     public async Task<IQueryable<SellerMemberDto>> QueryMembersAsync(
         Guid userId, Guid sellerId, CancellationToken ct = default)
     {
-        await _sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
+        await sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
 
         return QueryMembers(sellerId);
     }
@@ -28,22 +21,22 @@ public class SellerMemberService : ISellerMemberService
     public async Task<SellerMemberDto> AddManagerAsync(
         Guid userId, Guid sellerId, AddSellerManagerDto dto, CancellationToken ct = default)
     {
-        await _sellerAccess.EnsureOwnerAsync(userId, sellerId, ct);
+        await sellerAccess.EnsureOwnerAsync(userId, sellerId, ct);
 
         var email = dto.Email.Trim();
-        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Email == email, ct)
+        var user = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Email == email, ct)
                    ?? throw new InvalidOperationException($"User with email {email} was not found.");
 
-        var seller = await _dbContext.Sellers
+        var seller = await dbContext.Sellers
             .Include(x => x.Members)
             .FirstAsync(x => x.Id == sellerId, ct);
 
         var member = seller.AddManager(user.Id);
-        _dbContext.SellerMembers.Add(member);
+        dbContext.SellerMembers.Add(member);
 
         try
         {
-            await _dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
             when (ex.InnerException is PostgresException { SqlState: "23505" })
@@ -59,14 +52,14 @@ public class SellerMemberService : ISellerMemberService
     {
         if (memberUserId == userId)
         {
-            await _sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
+            await sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
         }
         else
         {
-            await _sellerAccess.EnsureOwnerAsync(userId, sellerId, ct);
+            await sellerAccess.EnsureOwnerAsync(userId, sellerId, ct);
         }
 
-        var seller = await _dbContext.Sellers
+        var seller = await dbContext.Sellers
             .Include(x => x.Members)
             .FirstAsync(x => x.Id == sellerId, ct);
 
@@ -76,14 +69,14 @@ public class SellerMemberService : ISellerMemberService
         }
 
         var member = seller.RemoveMember(memberUserId);
-        _dbContext.SellerMembers.Remove(member);
-        await _dbContext.SaveChangesAsync(ct);
+        dbContext.SellerMembers.Remove(member);
+        await dbContext.SaveChangesAsync(ct);
 
         return true;
     }
 
     private IQueryable<SellerMemberDto> QueryMembers(Guid sellerId) =>
-        _dbContext.SellerMembers
+        dbContext.SellerMembers
             .Where(x => x.SellerId == sellerId)
             .Select(SellerMemberDto.Projection);
 }

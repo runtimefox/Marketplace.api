@@ -104,7 +104,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Вставь сюда токен из /api/auth/login (без слова Bearer)."
+        Description = "JWT access token without the \"Bearer\" prefix. Browser requests are authenticated by the access_token cookie set by /api/auth/login."
     });
 
     options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement

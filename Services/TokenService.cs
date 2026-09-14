@@ -11,14 +11,9 @@ using MyApi.Shared.Configuration;
 
 namespace MyApi.Services;
 
-public class TokenService : ITokenService
+public class TokenService(IOptions<JwtOptions> options) : ITokenService
 {
-    private readonly JwtOptions _options;
-
-    public TokenService(IOptions<JwtOptions> options)
-    {
-        _options = options.Value;
-    }
+    private readonly JwtOptions _options = options.Value;
 
     public AccessToken GenerateToken(UserDto user)
     {
