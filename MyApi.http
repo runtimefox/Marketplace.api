@@ -2,6 +2,7 @@
 @productId = 00000000-0000-0000-0000-000000000000
 @sellerId = 00000000-0000-0000-0000-000000000000
 @orderId = 00000000-0000-0000-0000-000000000000
+@reviewId = 00000000-0000-0000-0000-000000000000
 
 ### Register a buyer
 POST {{MyApi_HostAddress}}/api/auth/register
@@ -181,4 +182,57 @@ Content-Type: application/json
 {
   "query": "mutation ($orderId: UUID!) { cancelOrder(id: $orderId) { id status canceledAt } }",
   "variables": { "orderId": "{{orderId}}" }
+}
+
+### GraphQL: product reviews
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { productReviews(productId: $productId, first: 10) { totalCount nodes { id rating comment createdAt author { username } } } }",
+  "variables": { "productId": "{{productId}}" }
+}
+
+### GraphQL: can the current user review a product
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { canReviewProduct(productId: $productId) }",
+  "variables": { "productId": "{{productId}}" }
+}
+
+### GraphQL: create review (buyer with a delivered order)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($productId: UUID!, $comment: String) { createReview(input: { productId: $productId, rating: 5, comment: $comment }) { id rating comment product { name } } }",
+  "variables": { "productId": "{{productId}}", "comment": "Great product" }
+}
+
+### GraphQL: update review (author)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($reviewId: UUID!, $comment: String) { updateReview(id: $reviewId, input: { rating: 4, comment: $comment }) { id rating comment updatedAt } }",
+  "variables": { "reviewId": "{{reviewId}}", "comment": "Good, but pricey" }
+}
+
+### GraphQL: delete review (author or admin)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($reviewId: UUID!) { deleteReview(id: $reviewId) }",
+  "variables": { "reviewId": "{{reviewId}}" }
+}
+
+### GraphQL: my reviews
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ myReviews(first: 10) { totalCount nodes { id rating comment product { name } } } }"
 }
