@@ -70,6 +70,31 @@ dotnet run --launch-profile http
 | http://localhost:5086/graphql | GraphQL endpoint and Nitro IDE (schema, autocomplete) |
 | http://localhost:5086/swagger | REST endpoints (Development only) |
 
+### Run with Docker
+
+The `Dockerfile` builds two images: `api` (the application) and `migrations` (an EF Core migrations bundle). In `docker-compose.yml` both are behind the `app` profile, so `docker compose up -d` still starts only PostgreSQL.
+
+Add to `.env`:
+
+```env
+JWT_KEY=<random string, at least 32 characters>
+API_PORT=8080
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+```bash
+docker compose --profile app up --build
+```
+
+Compose waits for PostgreSQL, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data and no Swagger.
+
+To apply migrations to another database with the image:
+
+```bash
+docker build --target migrations --tag myapi-migrations .
+docker run --rm myapi-migrations --connection "Host=...;Port=5432;Database=...;Username=...;Password=..."
+```
+
 ### Demo data
 
 In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`.
