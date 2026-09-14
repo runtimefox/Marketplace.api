@@ -16,6 +16,24 @@ public sealed class Scenario(MyApiFactory factory)
     public const string AddToCartMutation =
         "mutation ($productId: UUID!, $quantity: Int!) { addToCart(input: { productId: $productId, quantity: $quantity }) { totalQuantity totalPrice } }";
 
+    public const string CheckoutMutation =
+        "mutation ($input: CheckoutDtoInput!) { checkout(input: $input) { id } }";
+
+    public static object DeliveryAddressInput(string phone = "+1 (415) 555-0142", string city = "San Francisco") => new
+    {
+        recipientName = "Test Buyer",
+        phone,
+        country = "United States",
+        city,
+        addressLine = "500 Market Street",
+        apartment = "12",
+        postalCode = "94105",
+        comment = (string?)null
+    };
+
+    public static object CheckoutInput(string phone = "+1 (415) 555-0142") =>
+        new { deliveryAddress = DeliveryAddressInput(phone) };
+
     public static object ProductInput(Guid sellerId, Guid categoryId, int stock = 10, decimal price = 100m) => new
     {
         name = TestData.Name("product"),
@@ -129,7 +147,7 @@ public sealed class Scenario(MyApiFactory factory)
 
     public async Task<IReadOnlyList<Guid>> CheckoutAsync(ApiClient buyer)
     {
-        var response = await buyer.GraphQLAsync("mutation { checkout { id } }");
+        var response = await buyer.GraphQLAsync(CheckoutMutation, new { input = CheckoutInput() });
 
         return response["checkout"].AsArray().Select(x => x!["id"].AsGuid()).ToList();
     }
