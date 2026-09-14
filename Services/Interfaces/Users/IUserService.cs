@@ -8,6 +8,5 @@ public interface IUserService
     Task<ActionResult<UserDto>> GetUserByIdAsync(Guid id);
     Task<ActionResult<IEnumerable<UserDto>>> GetAllUsersAsync();
     Task<ActionResult<UserDto>> CreateUserAsync(CreateUserDto createUser);
-    Task<ActionResult<UserDto>> UpdateUserAsync(Guid id, CreateUserDto updateUser);
-    Task<ActionResult<UserDto>> DeleteUserAsync(Guid id);
+    Task<ActionResult<UserDto>> UpdateProfileAsync(Guid id, UpdateProfileDto updateProfile);
 }
