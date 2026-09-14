@@ -14,6 +14,9 @@ public class SellerAccessService : ISellerAccessService
         _dbContext = dbContext;
     }
 
+    public Task<bool> IsMemberAsync(Guid userId, Guid sellerId, CancellationToken ct = default) =>
+        _dbContext.SellerMembers.AnyAsync(x => x.SellerId == sellerId && x.UserAccountId == userId, ct);
+
     public Task EnsureMemberAsync(Guid userId, Guid sellerId, CancellationToken ct = default) =>
         GetRoleAsync(userId, sellerId, ct);
 
