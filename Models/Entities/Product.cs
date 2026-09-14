@@ -60,6 +60,10 @@ public class Product
 
     public uint Version { get; private set; }
 
+    private readonly List<Review> _reviews = [];
+
+    public IReadOnlyCollection<Review> Reviews => _reviews;
+
     private Product()
     {
     }

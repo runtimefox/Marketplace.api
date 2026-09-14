@@ -10,6 +10,7 @@ using MyApi.GraphQL.Cart;
 using MyApi.GraphQL.Categories;
 using MyApi.GraphQL.Orders;
 using MyApi.GraphQL.Products;
+using MyApi.GraphQL.Reviews;
 using MyApi.GraphQL.Sellers;
 using MyApi.GraphQL.Users;
 using MyApi.Services;
@@ -18,6 +19,7 @@ using MyApi.Services.Interfaces.Cart;
 using MyApi.Services.Interfaces.Categories;
 using MyApi.Services.Interfaces.Orders;
 using MyApi.Services.Interfaces.Products;
+using MyApi.Services.Interfaces.Reviews;
 using MyApi.Services.Interfaces.Sellers;
 using MyApi.Services.Interfaces.Users;
 using MyApi.Shared.Auth;
@@ -91,6 +93,7 @@ builder.Services.AddScoped<ISellerAccessService, SellerAccessService>();
 builder.Services.AddScoped<ISellerMemberService, SellerMemberService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -125,6 +128,8 @@ builder.Services
     .AddTypeExtension<CartMutations>()
     .AddTypeExtension<OrderQueries>()
     .AddTypeExtension<OrderMutations>()
+    .AddTypeExtension<ReviewQueries>()
+    .AddTypeExtension<ReviewMutations>()
     .AddTypeExtension<ProductQueries>()
     .AddTypeExtension<ProductMutations>()
     .AddTypeExtension<SellerQueries>()
