@@ -10,22 +10,13 @@ using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class UserService : IUserService
+public class UserService(AppDbContext dbContext, IPasswordHasher passwordHasher) : IUserService
 {
     private const string UsernameOrEmailTaken = "This username or email is already taken.";
 
-    private readonly AppDbContext _dbContext;
-    private readonly IPasswordHasher _passwordHasher;
-
-    public UserService(AppDbContext dbContext, IPasswordHasher passwordHasher)
-    {
-        _dbContext = dbContext;
-        _passwordHasher = passwordHasher;
-    }
-
     public async Task<ActionResult<UserDto>> GetUserByIdAsync(Guid id)
     {
-        var user = await _dbContext.UserAccounts
+        var user = await dbContext.UserAccounts
             .Where(x => x.Id == id)
             .Select(UserDto.Projection)
             .FirstOrDefaultAsync();
@@ -35,7 +26,7 @@ public class UserService : IUserService
 
     public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsersAsync()
     {
-        var users = await _dbContext.UserAccounts
+        var users = await dbContext.UserAccounts
             .Select(UserDto.Projection)
             .ToListAsync();
 
@@ -59,13 +50,13 @@ public class UserService : IUserService
         var user = new UserAccount(
             createUser.Username,
             createUser.Email,
-            _passwordHasher.Hash(createUser.Password));
+            passwordHasher.Hash(createUser.Password));
 
-        _dbContext.UserAccounts.Add(user);
+        dbContext.UserAccounts.Add(user);
 
         try
         {
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
@@ -77,7 +68,7 @@ public class UserService : IUserService
 
     public async Task<ActionResult<UserDto>> UpdateProfileAsync(Guid id, UpdateProfileDto updateProfile)
     {
-        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == id);
+        var user = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
         {
             return new NotFoundResult();
@@ -94,7 +85,7 @@ public class UserService : IUserService
 
         try
         {
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
@@ -106,14 +97,14 @@ public class UserService : IUserService
 
     private async Task<ActionResult?> FindConflictAsync(Guid? excludeUserId, string username, string email)
     {
-        var usernameTaken = await _dbContext.UserAccounts
+        var usernameTaken = await dbContext.UserAccounts
             .AnyAsync(x => x.Id != excludeUserId && x.Username == username);
         if (usernameTaken)
         {
             return new ConflictObjectResult($"User \"{username}\" already exists.");
         }
 
-        var emailTaken = await _dbContext.UserAccounts
+        var emailTaken = await dbContext.UserAccounts
             .AnyAsync(x => x.Id != excludeUserId && x.Email == email);
         if (emailTaken)
         {

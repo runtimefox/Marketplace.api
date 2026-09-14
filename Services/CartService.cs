@@ -8,27 +8,18 @@ using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class CartService : ICartService
+public class CartService(AppDbContext dbContext, IProductService productService) : ICartService
 {
-    private readonly AppDbContext _dbContext;
-    private readonly IProductService _productService;
-
-    public CartService(AppDbContext dbContext, IProductService productService)
-    {
-        _dbContext = dbContext;
-        _productService = productService;
-    }
-
     public async Task<CartDto> GetCartAsync(Guid userId, CancellationToken ct = default)
     {
-        var lines = await _dbContext.CartItems
+        var lines = await dbContext.CartItems
             .Where(x => x.UserAccountId == userId)
             .OrderBy(x => x.CreatedAt)
             .Select(x => new { x.ProductId, x.Quantity })
             .ToListAsync(ct);
 
         var productIds = lines.Select(x => x.ProductId).ToList();
-        var products = await _productService.Query(includeInactive: true)
+        var products = await productService.Query(includeInactive: true)
             .Where(x => productIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, ct);
 
@@ -47,7 +38,7 @@ public class CartService : ICartService
         if (item is null)
         {
             item = new CartItem(userId, product.Id, dto.Quantity);
-            _dbContext.CartItems.Add(item);
+            dbContext.CartItems.Add(item);
         }
         else
         {
@@ -67,7 +58,7 @@ public class CartService : ICartService
 
         if (dto.Quantity == 0)
         {
-            _dbContext.CartItems.Remove(item);
+            dbContext.CartItems.Remove(item);
         }
         else
         {
@@ -83,7 +74,7 @@ public class CartService : ICartService
 
     public async Task<CartDto> RemoveFromCartAsync(Guid userId, Guid productId, CancellationToken ct = default)
     {
-        await _dbContext.CartItems
+        await dbContext.CartItems
             .Where(x => x.UserAccountId == userId && x.ProductId == productId)
             .ExecuteDeleteAsync(ct);
 
@@ -92,7 +83,7 @@ public class CartService : ICartService
 
     public async Task<CartDto> ClearCartAsync(Guid userId, CancellationToken ct = default)
     {
-        await _dbContext.CartItems
+        await dbContext.CartItems
             .Where(x => x.UserAccountId == userId)
             .ExecuteDeleteAsync(ct);
 
@@ -100,17 +91,17 @@ public class CartService : ICartService
     }
 
     private Task<CartItem?> FindItemAsync(Guid userId, Guid productId, CancellationToken ct) =>
-        _dbContext.CartItems.FirstOrDefaultAsync(x => x.UserAccountId == userId && x.ProductId == productId, ct);
+        dbContext.CartItems.FirstOrDefaultAsync(x => x.UserAccountId == userId && x.ProductId == productId, ct);
 
     private async Task<Product> GetProductAsync(Guid productId, CancellationToken ct) =>
-        await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == productId, ct)
+        await dbContext.Products.FirstOrDefaultAsync(x => x.Id == productId, ct)
         ?? throw new InvalidOperationException($"Product {productId} was not found.");
 
     private async Task SaveAsync(CancellationToken ct)
     {
         try
         {
-            await _dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
         }
         catch (DbUpdateException ex)
             when (ex.InnerException is PostgresException { SqlState: "23505" })

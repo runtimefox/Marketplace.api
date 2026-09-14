@@ -10,24 +10,17 @@ namespace MyApi.Controllers;
 [ApiController]
 [Authorize(Roles = nameof(UserRole.Admin))]
 
-public class UserController : ControllerBase
+public class UserController(IUserService userService) : ControllerBase
 {
-    private readonly IUserService _userService;
-
-    public UserController(IUserService userService)
-    {
-        _userService = userService;
-    }
-
     [HttpGet]
     public async Task<ActionResult<IEnumerable<UserDto>>> Get()
     {
-        return await _userService.GetAllUsersAsync();
+        return await userService.GetAllUsersAsync();
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<UserDto>> Get(Guid id)
     {
-        return await _userService.GetUserByIdAsync(id);
+        return await userService.GetUserByIdAsync(id);
     }
 }

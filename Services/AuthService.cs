@@ -12,34 +12,19 @@ using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class AuthService : IAuthService
+public class AuthService(
+    AppDbContext dbContext,
+    IUserService userService,
+    ISellerService sellerService,
+    ITokenService tokenService,
+    IPasswordHasher passwordHasher) : IAuthService
 {
     private const string InvalidCredentials = "Invalid email or password.";
     private const string InvalidRefreshToken = "Refresh token is invalid.";
 
-    private readonly AppDbContext _dbContext;
-    private readonly IUserService _userService;
-    private readonly ISellerService _sellerService;
-    private readonly ITokenService _tokenService;
-    private readonly IPasswordHasher _passwordHasher;
-
-    public AuthService(
-        AppDbContext dbContext,
-        IUserService userService,
-        ISellerService sellerService,
-        ITokenService tokenService,
-        IPasswordHasher passwordHasher)
-    {
-        _dbContext = dbContext;
-        _userService = userService;
-        _sellerService = sellerService;
-        _tokenService = tokenService;
-        _passwordHasher = passwordHasher;
-    }
-
     public async Task<ActionResult<AuthResultDto>> RegisterAsync(CreateUserDto createUser)
     {
-        var userResult = await _userService.CreateUserAsync(createUser);
+        var userResult = await userService.CreateUserAsync(createUser);
         if (userResult.Result is not null)
         {
             return userResult.Result;
@@ -50,16 +35,16 @@ public class AuthService : IAuthService
 
     public async Task<ActionResult<AuthResultDto>> RegisterSellerAsync(RegisterSellerDto registerSeller)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        var userResult = await _userService.CreateUserAsync(registerSeller);
+        var userResult = await userService.CreateUserAsync(registerSeller);
         if (userResult.Result is not null)
         {
             return userResult.Result;
         }
 
         var user = userResult.Value!;
-        await _sellerService.CreateSellerAsync(user.Id, new CreateSellerDto { Name = registerSeller.SellerName });
+        await sellerService.CreateSellerAsync(user.Id, new CreateSellerDto { Name = registerSeller.SellerName });
         var tokens = await IssueTokensAsync(user);
 
         await transaction.CommitAsync();
@@ -69,10 +54,10 @@ public class AuthService : IAuthService
 
     public async Task<ActionResult<AuthResultDto>> LoginAsync(LoginDto login)
     {
-        var user = await _dbContext.UserAccounts
+        var user = await dbContext.UserAccounts
             .FirstOrDefaultAsync(x => x.Email == login.Email);
 
-        if (user is null || !_passwordHasher.Verify(user.PasswordHash, login.Password))
+        if (user is null || !passwordHasher.Verify(user.PasswordHash, login.Password))
         {
             return new UnauthorizedObjectResult(InvalidCredentials);
         }
@@ -82,9 +67,9 @@ public class AuthService : IAuthService
 
     public async Task<ActionResult<AuthResultDto>> RefreshAsync(string refreshToken)
     {
-        var hash = _tokenService.HashRefreshToken(refreshToken);
+        var hash = tokenService.HashRefreshToken(refreshToken);
 
-        var stored = await _dbContext.RefreshTokens
+        var stored = await dbContext.RefreshTokens
             .Include(x => x.User)
             .FirstOrDefaultAsync(x => x.TokenHash == hash);
 
@@ -106,15 +91,15 @@ public class AuthService : IAuthService
 
     public async Task<ActionResult> RevokeAsync(string refreshToken)
     {
-        var hash = _tokenService.HashRefreshToken(refreshToken);
+        var hash = tokenService.HashRefreshToken(refreshToken);
 
-        var stored = await _dbContext.RefreshTokens
+        var stored = await dbContext.RefreshTokens
             .FirstOrDefaultAsync(x => x.TokenHash == hash);
         
         if (stored is not null && stored.IsActive)
         {
             stored.Revoke();
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
 
         return new NoContentResult();
@@ -122,13 +107,13 @@ public class AuthService : IAuthService
 
     public async Task<ActionResult<AuthResultDto>> ChangePasswordAsync(Guid userId, ChangePasswordDto changePassword)
     {
-        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == userId);
+        var user = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == userId);
         if (user is null)
         {
             return new UnauthorizedObjectResult("User not found.");
         }
 
-        if (!_passwordHasher.Verify(user.PasswordHash, changePassword.CurrentPassword))
+        if (!passwordHasher.Verify(user.PasswordHash, changePassword.CurrentPassword))
         {
             return new BadRequestObjectResult("Current password is incorrect.");
         }
@@ -144,10 +129,10 @@ public class AuthService : IAuthService
             return new BadRequestObjectResult(passwordError);
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
 
-        user.SetPasswordHash(_passwordHasher.Hash(changePassword.NewPassword));
-        await _dbContext.RefreshTokens
+        user.SetPasswordHash(passwordHasher.Hash(changePassword.NewPassword));
+        await dbContext.RefreshTokens
             .Where(x => x.UserId == user.Id)
             .ExecuteDeleteAsync();
         var tokens = await IssueTokensAsync(UserDto.FromEntity(user));
@@ -159,11 +144,11 @@ public class AuthService : IAuthService
 
     private async Task<AuthResultDto> IssueTokensAsync(UserDto user)
     {
-        var access = _tokenService.GenerateToken(user);
-        var refresh = _tokenService.GenerateRefreshToken();
+        var access = tokenService.GenerateToken(user);
+        var refresh = tokenService.GenerateRefreshToken();
 
-        _dbContext.RefreshTokens.Add(new RefreshToken(user.Id, refresh.Hash, refresh.ExpiresAt));
-        await _dbContext.SaveChangesAsync();
+        dbContext.RefreshTokens.Add(new RefreshToken(user.Id, refresh.Hash, refresh.ExpiresAt));
+        await dbContext.SaveChangesAsync();
 
         return new AuthResultDto
         {
@@ -176,7 +161,7 @@ public class AuthService : IAuthService
 
     private async Task RevokeAllForUserAsync(Guid userId)
     {
-        var active = await _dbContext.RefreshTokens
+        var active = await dbContext.RefreshTokens
             .Where(x => x.UserId == userId && x.RevokedAt == null)
             .ToListAsync();
 
@@ -185,7 +170,6 @@ public class AuthService : IAuthService
             token.Revoke();
         }
 
-        await _dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
     }
-
 }
