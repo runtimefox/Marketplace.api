@@ -13,6 +13,9 @@ namespace MyApi.Controllers;
 
 public class AuthController : ControllerBase
 {
+    private const string MissingUserId = "The token does not contain a user identifier.";
+    private const string UserNotFound = "User not found.";
+
     private readonly IAuthService _authService;
     private readonly IUserService _userService;
     private readonly IWebHostEnvironment _environment;
@@ -51,14 +54,42 @@ public class AuthController : ControllerBase
     {
         if (!User.TryGetUserId(out var userId))
         {
-            return Unauthorized("The token does not contain a user identifier.");
+            return Unauthorized(MissingUserId);
         }
 
         var result = await _userService.GetUserByIdAsync(userId);
 
         return result.Result is NotFoundResult
-            ? Unauthorized("User not found.")
+            ? Unauthorized(UserNotFound)
             : result;
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<ActionResult<UserDto>> UpdateMe(UpdateProfileDto updateProfile)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(MissingUserId);
+        }
+
+        var result = await _userService.UpdateProfileAsync(userId, updateProfile);
+
+        return result.Result is NotFoundResult
+            ? Unauthorized(UserNotFound)
+            : result;
+    }
+
+    [Authorize]
+    [HttpPut("me/password")]
+    public async Task<ActionResult<AuthResponseDto>> ChangePassword(ChangePasswordDto changePassword)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(MissingUserId);
+        }
+
+        return Respond(await _authService.ChangePasswordAsync(userId, changePassword));
     }
 
     [HttpPost("refresh")]

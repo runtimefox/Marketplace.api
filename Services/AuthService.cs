@@ -7,6 +7,7 @@ using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Auth;
 using MyApi.Services.Interfaces.Sellers;
 using MyApi.Services.Interfaces.Users;
+using MyApi.Shared.Auth;
 using MyApi.Shared.Data;
 
 namespace MyApi.Services;
@@ -117,6 +118,43 @@ public class AuthService : IAuthService
         }
 
         return new NoContentResult();
+    }
+
+    public async Task<ActionResult<AuthResultDto>> ChangePasswordAsync(Guid userId, ChangePasswordDto changePassword)
+    {
+        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == userId);
+        if (user is null)
+        {
+            return new UnauthorizedObjectResult("User not found.");
+        }
+
+        if (!_passwordHasher.Verify(user.PasswordHash, changePassword.CurrentPassword))
+        {
+            return new BadRequestObjectResult("Current password is incorrect.");
+        }
+
+        if (changePassword.NewPassword == changePassword.CurrentPassword)
+        {
+            return new BadRequestObjectResult("New password must differ from the current one.");
+        }
+
+        var passwordError = PasswordPolicy.Validate(changePassword.NewPassword);
+        if (passwordError is not null)
+        {
+            return new BadRequestObjectResult(passwordError);
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+        user.SetPasswordHash(_passwordHasher.Hash(changePassword.NewPassword));
+        await _dbContext.RefreshTokens
+            .Where(x => x.UserId == user.Id)
+            .ExecuteDeleteAsync();
+        var tokens = await IssueTokensAsync(UserDto.FromEntity(user));
+
+        await transaction.CommitAsync();
+
+        return tokens;
     }
 
     private async Task<AuthResultDto> IssueTokensAsync(UserDto user)
