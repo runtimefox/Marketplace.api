@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  CONFIGURATION: Release
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore tests/MyApi.Tests/MyApi.Tests.csproj
+
+      - name: Build
+        run: dotnet build tests/MyApi.Tests/MyApi.Tests.csproj --no-restore --configuration "$CONFIGURATION"
+
+      - name: Install dotnet-ef
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.12
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Check for missing migrations
+        env:
+          ConnectionStrings__DbConnection: Host=localhost;Database=ci
+          Jwt__Key: ci-design-time-key-not-used-at-runtime-0123456789
+        run: dotnet ef migrations has-pending-model-changes --project MyApi.csproj --no-build --configuration "$CONFIGURATION"
+
+      - name: Test
+        run: >
+          dotnet test tests/MyApi.Tests/MyApi.Tests.csproj
+          --no-build
+          --configuration "$CONFIGURATION"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults
+          if-no-files-found: ignore
