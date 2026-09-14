@@ -58,6 +58,8 @@ public class Product
     [Column("UpdatedAt")]
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    public uint Version { get; private set; }
+
     private Product()
     {
     }
@@ -128,6 +130,31 @@ public class Product
 
         Stock -= quantity;
         Touch();
+    }
+
+    public void IncreaseStock(int quantity)
+    {
+        if (quantity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), "Quantity must be positive.");
+        }
+
+        Stock += quantity;
+        Touch();
+    }
+
+    public void EnsureAvailable(int quantity)
+    {
+        if (!IsActive)
+        {
+            throw new InvalidOperationException($"Product {Name} is not available.");
+        }
+
+        if (quantity > Stock)
+        {
+            throw new InvalidOperationException(
+                $"Only {Stock} items of {Name} in stock, {quantity} requested.");
+        }
     }
 
     public void ChangeCategory(Guid categoryId)
