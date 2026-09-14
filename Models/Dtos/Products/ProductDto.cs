@@ -12,6 +12,7 @@ public record ProductDto
     public required string Sku { get; init; }
     public required decimal Price { get; init; }
     public required int Stock { get; init; }
+    public required bool IsActive { get; init; }
     public required CategoryDto Category { get; init; }
     public required SellerDto Seller { get; init; }
     public string? Description { get; init; }
@@ -24,6 +25,7 @@ public record ProductDto
         Sku = x.Sku,
         Price = x.Price,
         Stock = x.Stock,
+        IsActive = x.IsActive,
         Category = new CategoryDto
         {
             Id = x.Category.Id,
@@ -46,6 +48,7 @@ public record ProductDto
         Sku = product.Sku,
         Price = product.Price,
         Stock = product.Stock,
+        IsActive = product.IsActive,
         Category = CategoryDto.FromEntity(product.Category),
         Seller = SellerDto.FromEntity(product.Seller),
         Description = product.Description,
