@@ -172,7 +172,9 @@ type Mutation {
   updateCartItem(input: UpdateCartItemDtoInput!): CartDto! @cost(weight: "10")
   removeFromCart(productId: UUID!): CartDto! @cost(weight: "10")
   clearCart: CartDto! @cost(weight: "10")
-  checkout: [OrderDto!]! @cost(weight: "10")
+  checkout(input: CheckoutDtoInput!): [OrderDto!]! @cost(weight: "10")
+  updateOrderDeliveryAddress(id: UUID!, input: DeliveryAddressDtoInput!): OrderDto
+    @cost(weight: "10")
   shipOrder(id: UUID!): OrderDto @cost(weight: "10")
   confirmOrderDelivery(id: UUID!): OrderDto @cost(weight: "10")
   cancelOrder(id: UUID!): OrderDto @cost(weight: "10")
@@ -211,6 +213,17 @@ type CartItemDto {
 type CategoryDto {
   id: UUID!
   name: String!
+}
+
+type DeliveryAddressDto {
+  recipientName: String!
+  phone: String!
+  country: String!
+  city: String!
+  addressLine: String!
+  apartment: String
+  postalCode: String!
+  comment: String
 }
 
 "A connection to a list of items."
@@ -260,6 +273,7 @@ type OrderDto {
   buyer: UserSummaryDto!
   seller: SellerDto!
   items: [OrderItemDto!]!
+  deliveryAddress: DeliveryAddressDto!
   createdAt: DateTime!
   shippedAt: DateTime
   deliveredAt: DateTime
@@ -474,6 +488,10 @@ input CategoryDtoSortInput {
   name: SortEnumType @cost(weight: "10")
 }
 
+input CheckoutDtoInput {
+  deliveryAddress: DeliveryAddressDtoInput!
+}
+
 input CreateCategoryDtoInput {
   name: String!
 }
@@ -529,6 +547,41 @@ input DecimalOperationFilterInput {
   nlte: Decimal @cost(weight: "10")
 }
 
+input DeliveryAddressDtoFilterInput {
+  and: [DeliveryAddressDtoFilterInput!]
+  or: [DeliveryAddressDtoFilterInput!]
+  recipientName: StringOperationFilterInput
+  phone: StringOperationFilterInput
+  country: StringOperationFilterInput
+  city: StringOperationFilterInput
+  addressLine: StringOperationFilterInput
+  apartment: StringOperationFilterInput
+  postalCode: StringOperationFilterInput
+  comment: StringOperationFilterInput
+}
+
+input DeliveryAddressDtoInput {
+  recipientName: String!
+  phone: String!
+  country: String!
+  city: String!
+  addressLine: String!
+  apartment: String
+  postalCode: String!
+  comment: String
+}
+
+input DeliveryAddressDtoSortInput {
+  recipientName: SortEnumType @cost(weight: "10")
+  phone: SortEnumType @cost(weight: "10")
+  country: SortEnumType @cost(weight: "10")
+  city: SortEnumType @cost(weight: "10")
+  addressLine: SortEnumType @cost(weight: "10")
+  apartment: SortEnumType @cost(weight: "10")
+  postalCode: SortEnumType @cost(weight: "10")
+  comment: SortEnumType @cost(weight: "10")
+}
+
 input IntOperationFilterInput {
   eq: Int @cost(weight: "10")
   neq: Int @cost(weight: "10")
@@ -560,6 +613,7 @@ input OrderDtoFilterInput {
   buyer: UserSummaryDtoFilterInput
   seller: SellerDtoFilterInput
   items: ListFilterInputTypeOfOrderItemDtoFilterInput
+  deliveryAddress: DeliveryAddressDtoFilterInput
   createdAt: DateTimeOperationFilterInput
   shippedAt: DateTimeOperationFilterInput
   deliveredAt: DateTimeOperationFilterInput
@@ -572,6 +626,7 @@ input OrderDtoSortInput {
   totalAmount: SortEnumType @cost(weight: "10")
   buyer: UserSummaryDtoSortInput @cost(weight: "10")
   seller: SellerDtoSortInput @cost(weight: "10")
+  deliveryAddress: DeliveryAddressDtoSortInput @cost(weight: "10")
   createdAt: SortEnumType @cost(weight: "10")
   shippedAt: SortEnumType @cost(weight: "10")
   deliveredAt: SortEnumType @cost(weight: "10")

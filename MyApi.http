@@ -137,7 +137,40 @@ POST {{MyApi_HostAddress}}/graphql
 Content-Type: application/json
 
 {
-  "query": "mutation { checkout { id status totalAmount seller { name } items { productName unitPrice quantity lineTotal } } }"
+  "query": "mutation ($input: CheckoutDtoInput!) { checkout(input: $input) { id status totalAmount seller { name } items { productName unitPrice quantity lineTotal } deliveryAddress { recipientName phone country city addressLine } } }",
+  "variables": {
+    "input": {
+      "deliveryAddress": {
+        "recipientName": "Demo Buyer",
+        "phone": "+49 30 1234567",
+        "country": "Germany",
+        "city": "Berlin",
+        "addressLine": "Unter den Linden 5",
+        "apartment": "3",
+        "postalCode": "10117",
+        "comment": "Leave at the front desk"
+      }
+    }
+  }
+}
+
+### GraphQL: change delivery address (buyer, before shipping)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($orderId: UUID!, $input: DeliveryAddressDtoInput!) { updateOrderDeliveryAddress(id: $orderId, input: $input) { id deliveryAddress { country city addressLine apartment } } }",
+  "variables": {
+    "orderId": "{{orderId}}",
+    "input": {
+      "recipientName": "Demo Buyer",
+      "phone": "+1 (415) 555-0142",
+      "country": "United States",
+      "city": "San Francisco",
+      "addressLine": "500 Market Street",
+      "postalCode": "94105"
+    }
+  }
 }
 
 ### GraphQL: my orders

@@ -13,6 +13,7 @@ public record OrderDto
     public required UserSummaryDto Buyer { get; init; }
     public required SellerDto Seller { get; init; }
     public required IReadOnlyList<OrderItemDto> Items { get; init; }
+    public required DeliveryAddressDto DeliveryAddress { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? ShippedAt { get; init; }
     public DateTimeOffset? DeliveredAt { get; init; }
@@ -45,6 +46,17 @@ public record OrderDto
                 LineTotal = i.UnitPrice * i.Quantity
             })
             .ToList(),
+        DeliveryAddress = new DeliveryAddressDto
+        {
+            RecipientName = x.DeliveryAddress.RecipientName,
+            Phone = x.DeliveryAddress.Phone,
+            Country = x.DeliveryAddress.Country,
+            City = x.DeliveryAddress.City,
+            AddressLine = x.DeliveryAddress.AddressLine,
+            Apartment = x.DeliveryAddress.Apartment,
+            PostalCode = x.DeliveryAddress.PostalCode,
+            Comment = x.DeliveryAddress.Comment
+        },
         CreatedAt = x.CreatedAt,
         ShippedAt = x.ShippedAt,
         DeliveredAt = x.DeliveredAt,

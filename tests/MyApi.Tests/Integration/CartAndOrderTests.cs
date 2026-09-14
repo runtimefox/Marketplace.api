@@ -38,7 +38,9 @@ public class CartAndOrderTests(MyApiFactory factory)
         await _scenario.AddToCartAsync(buyer, firstProduct, 2);
         await _scenario.AddToCartAsync(buyer, secondProduct, 3);
 
-        var checkout = await buyer.GraphQLAsync("mutation { checkout { status totalAmount seller { id } } }");
+        var checkout = await buyer.GraphQLAsync(
+            "mutation ($input: CheckoutDtoInput!) { checkout(input: $input) { status totalAmount seller { id } } }",
+            new { input = Scenario.CheckoutInput() });
         var cart = await buyer.GraphQLAsync("{ myCart { totalQuantity } }");
 
         var orders = checkout["checkout"].AsArray();
@@ -56,9 +58,71 @@ public class CartAndOrderTests(MyApiFactory factory)
     {
         var buyer = await _scenario.CustomerAsync();
 
-        var response = await buyer.GraphQLAsync("mutation { checkout { id } }");
+        var response = await buyer.GraphQLAsync(Scenario.CheckoutMutation, new { input = Scenario.CheckoutInput() });
 
         response.AssertError("INVALID_INPUT");
+    }
+
+    [Fact]
+    public async Task Checkout_WithInvalidPhone_IsRejected_AndKeepsCart()
+    {
+        var seller = await _scenario.SellerAsync();
+        var productId = await _scenario.ProductAsync(seller);
+        var buyer = await _scenario.CustomerAsync();
+        await _scenario.AddToCartAsync(buyer, productId);
+
+        var response = await buyer.GraphQLAsync(
+            Scenario.CheckoutMutation,
+            new { input = Scenario.CheckoutInput(phone: "12-34") });
+        var cart = await buyer.GraphQLAsync("{ myCart { totalQuantity } }");
+
+        response.AssertError("INVALID_INPUT");
+        Assert.Equal(1, cart["myCart"]["totalQuantity"].AsInt());
+    }
+
+    [Fact]
+    public async Task Order_ExposesNormalizedDeliveryAddressToSeller()
+    {
+        var seller = await _scenario.SellerAsync();
+        var productId = await _scenario.ProductAsync(seller);
+        var buyer = await _scenario.CustomerAsync();
+        await _scenario.AddToCartAsync(buyer, productId);
+        await _scenario.CheckoutAsync(buyer);
+
+        var orders = await seller.Client.GraphQLAsync(
+            "query ($sellerId: UUID!) { sellerOrders(sellerId: $sellerId) { nodes { deliveryAddress { recipientName phone country city addressLine apartment postalCode comment } } } }",
+            new { sellerId = seller.SellerId });
+
+        var address = Assert.Single(orders["sellerOrders"]["nodes"]!.AsArray())!["deliveryAddress"]!;
+        Assert.Equal("Test Buyer", address["recipientName"].AsString());
+        Assert.Equal("+14155550142", address["phone"].AsString());
+        Assert.Equal("United States", address["country"].AsString());
+        Assert.Equal("San Francisco", address["city"].AsString());
+        Assert.Equal("12", address["apartment"].AsString());
+        Assert.Null(address["comment"]);
+    }
+
+    [Fact]
+    public async Task DeliveryAddress_CanBeChangedOnlyByBuyerBeforeShipping()
+    {
+        const string UpdateAddress =
+            "mutation ($id: UUID!, $input: DeliveryAddressDtoInput!) { updateOrderDeliveryAddress(id: $id, input: $input) { deliveryAddress { city } } }";
+
+        var seller = await _scenario.SellerAsync();
+        var productId = await _scenario.ProductAsync(seller);
+        var buyer = await _scenario.CustomerAsync();
+        await _scenario.AddToCartAsync(buyer, productId);
+        var id = (await _scenario.CheckoutAsync(buyer)).Single();
+        var newAddress = Scenario.DeliveryAddressInput(city: "Berlin");
+
+        var sellerChanges = await seller.Client.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
+        var buyerChanges = await buyer.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
+        (await seller.Client.GraphQLAsync(ShipOrder, new { id })).EnsureSuccess();
+        var afterShipping = await buyer.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
+
+        sellerChanges.AssertError("FORBIDDEN");
+        Assert.Equal("Berlin", buyerChanges["updateOrderDeliveryAddress"]["deliveryAddress"]!["city"].AsString());
+        afterShipping.AssertError("INVALID_INPUT");
     }
 
     [Fact]

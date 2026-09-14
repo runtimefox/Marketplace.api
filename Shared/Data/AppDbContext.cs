@@ -147,6 +147,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Order>()
+            .OwnsOne(x => x.DeliveryAddress);
+
+        modelBuilder.Entity<Order>()
+            .Navigation(x => x.DeliveryAddress)
+            .IsRequired();
+
+        modelBuilder.Entity<Order>()
             .HasMany(x => x.Items)
             .WithOne()
             .HasForeignKey(x => x.OrderId)

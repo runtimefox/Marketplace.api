@@ -12,7 +12,7 @@ public class OrderEntityTests
         var phone = NewProduct(stock: 10, price: 99.99m);
         var charger = NewProduct(stock: 5, price: 10m);
 
-        var order = Order.Create(Guid.NewGuid(), SellerId, [(phone, 2), (charger, 3)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(phone, 2), (charger, 3)]);
 
         Assert.Equal(OrderStatus.Created, order.Status);
         Assert.Equal(229.98m, order.TotalAmount);
@@ -26,7 +26,7 @@ public class OrderEntityTests
     {
         var foreignProduct = NewProduct(sellerId: Guid.NewGuid());
 
-        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, [(foreignProduct, 1)]));
+        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(foreignProduct, 1)]));
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class OrderEntityTests
         var product = NewProduct(stock: 1);
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => Order.Create(Guid.NewGuid(), SellerId, [(product, 2)]));
+            () => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 2)]));
 
         Assert.Contains("Only 1 items", exception.Message);
     }
@@ -43,14 +43,14 @@ public class OrderEntityTests
     [Fact]
     public void Create_WithoutItems_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, []));
+        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[]));
     }
 
     [Fact]
     public void Cancel_ReturnsStock()
     {
         var product = NewProduct(stock: 5);
-        var order = Order.Create(Guid.NewGuid(), SellerId, [(product, 3)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 3)]);
 
         order.Cancel();
 
@@ -62,7 +62,7 @@ public class OrderEntityTests
     [Fact]
     public void StatusTransitions_FollowOrderLifecycle()
     {
-        var order = Order.Create(Guid.NewGuid(), SellerId, [(NewProduct(), 1)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(NewProduct(), 1)]);
 
         Assert.Throws<InvalidOperationException>(order.Deliver);
 
@@ -76,6 +76,21 @@ public class OrderEntityTests
         Assert.NotNull(order.ShippedAt);
         Assert.NotNull(order.DeliveredAt);
     }
+
+    [Fact]
+    public void ChangeDeliveryAddress_IsAllowedOnlyBeforeShipping()
+    {
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)]);
+
+        order.ChangeDeliveryAddress(NewAddress(city: "Berlin"));
+        order.Ship();
+
+        Assert.Equal("Berlin", order.DeliveryAddress.City);
+        Assert.Throws<InvalidOperationException>(() => order.ChangeDeliveryAddress(NewAddress()));
+    }
+
+    private static DeliveryAddress NewAddress(string city = "San Francisco") =>
+        new("Test Buyer", "+14155550142", "United States", city, "500 Market Street", null, "94105", null);
 
     private static Product NewProduct(int stock = 10, decimal price = 100m, Guid? sellerId = null) =>
         new("Phone", $"sku-{Guid.NewGuid():N}", price, stock, Guid.NewGuid(), sellerId ?? SellerId);
