@@ -1,8 +1,12 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using MyApi.GraphQL;
@@ -85,6 +89,56 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+builder.Services
+    .AddOptions<FrontendOptions>()
+    .Bind(builder.Configuration.GetSection(FrontendOptions.SectionName));
+
+builder.Services.AddCors();
+builder.Services
+    .AddOptions<CorsOptions>()
+    .Configure<IOptions<FrontendOptions>>((cors, frontend) =>
+        cors.AddPolicy(FrontendOptions.CorsPolicy, policy => policy
+            .WithOrigins(frontend.Value.AllowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()));
+
+builder.Services
+    .AddOptions<AuthRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(AuthRateLimitOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy(RateLimitPolicies.Auth, context =>
+    {
+        var limits = context.RequestServices.GetRequiredService<IOptions<AuthRateLimitOptions>>().Value;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limits.PermitLimit,
+                Window = TimeSpan.FromSeconds(limits.WindowSeconds),
+                QueueLimit = 0
+            });
+    });
+
+    options.OnRejected = async (context, ct) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+        }
+
+        await context.HttpContext.Response.WriteAsync("Too many requests. Try again later.", ct);
+    };
+});
+
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -147,6 +201,8 @@ if(builder.Environment.IsDevelopment()){
 }
 
 app.UseHttpsRedirection();
+app.UseCors(FrontendOptions.CorsPolicy);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

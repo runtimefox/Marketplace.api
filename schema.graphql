@@ -1,0 +1,816 @@
+schema {
+  query: Query
+  mutation: Mutation
+}
+
+type Query {
+  users: [UserDto!]! @cost(weight: "10")
+  categories(
+    where: CategoryDtoFilterInput @cost(weight: "10")
+    order: [CategoryDtoSortInput!] @cost(weight: "10")
+  ): [CategoryDto!]! @cost(weight: "10")
+  categoryById(id: UUID!): CategoryDto @cost(weight: "10")
+  myCart: CartDto! @cost(weight: "10")
+  myOrders(
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: OrderDtoFilterInput @cost(weight: "10")
+    order: [OrderDtoSortInput!] @cost(weight: "10")
+  ): MyOrdersConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  sellerOrders(
+    sellerId: UUID!
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: OrderDtoFilterInput @cost(weight: "10")
+    order: [OrderDtoSortInput!] @cost(weight: "10")
+  ): SellerOrdersConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  orderById(id: UUID!): OrderDto @cost(weight: "10")
+  productReviews(
+    productId: UUID!
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: ReviewDtoFilterInput @cost(weight: "10")
+    order: [ReviewDtoSortInput!] @cost(weight: "10")
+  ): ProductReviewsConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  myReviews(
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: ReviewDtoFilterInput @cost(weight: "10")
+    order: [ReviewDtoSortInput!] @cost(weight: "10")
+  ): MyReviewsConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  canReviewProduct(productId: UUID!): Boolean! @cost(weight: "10")
+  products(
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: ProductDtoFilterInput @cost(weight: "10")
+    order: [ProductDtoSortInput!] @cost(weight: "10")
+  ): ProductsConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  productById(id: UUID!): ProductDto @cost(weight: "10")
+  sellerProducts(
+    sellerId: UUID!
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: ProductDtoFilterInput @cost(weight: "10")
+    order: [ProductDtoSortInput!] @cost(weight: "10")
+  ): SellerProductsConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  sellers(
+    "Returns the first _n_ elements from the list."
+    first: Int
+    "Returns the elements in the list that come after the specified cursor."
+    after: String
+    "Returns the last _n_ elements from the list."
+    last: Int
+    "Returns the elements in the list that come before the specified cursor."
+    before: String
+    where: SellerDtoFilterInput @cost(weight: "10")
+    order: [SellerDtoSortInput!] @cost(weight: "10")
+  ): SellersConnection
+    @listSize(
+      assumedSize: 50
+      slicingArguments: ["first", "last"]
+      slicingArgumentDefaultValue: 10
+      sizedFields: ["edges", "nodes"]
+      requireOneSlicingArgument: false
+    )
+    @cost(weight: "10")
+  sellerById(id: UUID!): SellerDto @cost(weight: "10")
+  mySellers: [SellerMembershipDto!]! @cost(weight: "10")
+  sellerMembers(sellerId: UUID!): [SellerMemberDto!]! @cost(weight: "10")
+}
+
+type Mutation {
+  createCategory(input: CreateCategoryDtoInput!): CategoryDto!
+    @cost(weight: "10")
+  updateCategory(id: UUID!, input: UpdateCategoryDtoInput!): CategoryDto
+    @cost(weight: "10")
+  deleteCategory(id: UUID!): Boolean! @cost(weight: "10")
+  addToCart(input: AddToCartDtoInput!): CartDto! @cost(weight: "10")
+  updateCartItem(input: UpdateCartItemDtoInput!): CartDto! @cost(weight: "10")
+  removeFromCart(productId: UUID!): CartDto! @cost(weight: "10")
+  clearCart: CartDto! @cost(weight: "10")
+  checkout: [OrderDto!]! @cost(weight: "10")
+  shipOrder(id: UUID!): OrderDto @cost(weight: "10")
+  confirmOrderDelivery(id: UUID!): OrderDto @cost(weight: "10")
+  cancelOrder(id: UUID!): OrderDto @cost(weight: "10")
+  createReview(input: CreateReviewDtoInput!): ReviewDto! @cost(weight: "10")
+  updateReview(id: UUID!, input: UpdateReviewDtoInput!): ReviewDto
+    @cost(weight: "10")
+  deleteReview(id: UUID!): Boolean! @cost(weight: "10")
+  createProduct(input: CreateProductDtoInput!): ProductDto! @cost(weight: "10")
+  updateProduct(id: UUID!, input: UpdateProductDtoInput!): ProductDto
+    @cost(weight: "10")
+  activateProduct(id: UUID!): ProductDto @cost(weight: "10")
+  deleteProduct(id: UUID!): Boolean! @cost(weight: "10")
+  createSeller(input: CreateSellerDtoInput!): SellerDto! @cost(weight: "10")
+  updateSeller(id: UUID!, input: UpdateSellerDtoInput!): SellerDto
+    @cost(weight: "10")
+  deleteSeller(id: UUID!): Boolean! @cost(weight: "10")
+  addSellerManager(sellerId: UUID!, input: AddSellerManagerDtoInput!): SellerMemberDto!
+    @cost(weight: "10")
+  removeSellerMember(sellerId: UUID!, userId: UUID!): Boolean!
+    @cost(weight: "10")
+}
+
+type CartDto {
+  items: [CartItemDto!]!
+  totalQuantity: Int!
+  totalPrice: Decimal!
+}
+
+type CartItemDto {
+  product: ProductDto!
+  quantity: Int!
+  lineTotal: Decimal!
+  isAvailable: Boolean!
+}
+
+type CategoryDto {
+  id: UUID!
+  name: String!
+}
+
+"A connection to a list of items."
+type MyOrdersConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [MyOrdersEdge!]
+  "A flattened list of the nodes."
+  nodes: [OrderDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type MyOrdersEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: OrderDto!
+}
+
+"A connection to a list of items."
+type MyReviewsConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [MyReviewsEdge!]
+  "A flattened list of the nodes."
+  nodes: [ReviewDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type MyReviewsEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: ReviewDto!
+}
+
+type OrderDto {
+  id: UUID!
+  status: OrderStatus!
+  totalAmount: Decimal!
+  buyer: UserSummaryDto!
+  seller: SellerDto!
+  items: [OrderItemDto!]!
+  createdAt: DateTime!
+  shippedAt: DateTime
+  deliveredAt: DateTime
+  canceledAt: DateTime
+}
+
+type OrderItemDto {
+  productId: UUID!
+  productName: String!
+  productSku: String!
+  unitPrice: Decimal!
+  quantity: Int!
+  lineTotal: Decimal!
+}
+
+"Information about pagination in a connection."
+type PageInfo {
+  "Indicates whether more edges exist following the set defined by the clients arguments."
+  hasNextPage: Boolean!
+  "Indicates whether more edges exist prior the set defined by the clients arguments."
+  hasPreviousPage: Boolean!
+  "When paginating backwards, the cursor to continue."
+  startCursor: String
+  "When paginating forwards, the cursor to continue."
+  endCursor: String
+}
+
+type ProductDto {
+  id: UUID!
+  name: String!
+  sku: String!
+  price: Decimal!
+  stock: Int!
+  isActive: Boolean!
+  rating: Decimal!
+  reviewCount: Int!
+  category: CategoryDto!
+  seller: SellerDto!
+  description: String
+  imageUrl: String
+}
+
+"A connection to a list of items."
+type ProductReviewsConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [ProductReviewsEdge!]
+  "A flattened list of the nodes."
+  nodes: [ReviewDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type ProductReviewsEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: ReviewDto!
+}
+
+"A connection to a list of items."
+type ProductsConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [ProductsEdge!]
+  "A flattened list of the nodes."
+  nodes: [ProductDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type ProductsEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: ProductDto!
+}
+
+type ProductSummaryDto {
+  id: UUID!
+  name: String!
+}
+
+type ReviewDto {
+  id: UUID!
+  rating: Int!
+  comment: String
+  author: UserSummaryDto!
+  product: ProductSummaryDto!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type SellerDto {
+  id: UUID!
+  name: String!
+  rating: Decimal!
+}
+
+type SellerMemberDto {
+  userId: UUID!
+  username: String!
+  email: String!
+  role: SellerMemberRole!
+  joinedAt: DateTime!
+}
+
+type SellerMembershipDto {
+  seller: SellerDto!
+  role: SellerMemberRole!
+}
+
+"A connection to a list of items."
+type SellerOrdersConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [SellerOrdersEdge!]
+  "A flattened list of the nodes."
+  nodes: [OrderDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type SellerOrdersEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: OrderDto!
+}
+
+"A connection to a list of items."
+type SellerProductsConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [SellerProductsEdge!]
+  "A flattened list of the nodes."
+  nodes: [ProductDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type SellerProductsEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: ProductDto!
+}
+
+"A connection to a list of items."
+type SellersConnection {
+  "Information to aid in pagination."
+  pageInfo: PageInfo!
+  "A list of edges."
+  edges: [SellersEdge!]
+  "A flattened list of the nodes."
+  nodes: [SellerDto!]
+  "Identifies the total count of items in the connection."
+  totalCount: Int! @cost(weight: "10")
+}
+
+"An edge in a connection."
+type SellersEdge {
+  "A cursor for use in pagination."
+  cursor: String!
+  "The item at the end of the edge."
+  node: SellerDto!
+}
+
+type UserDto {
+  id: UUID!
+  username: String!
+  email: String!
+  role: UserRole!
+}
+
+type UserSummaryDto {
+  id: UUID!
+  username: String!
+}
+
+input AddSellerManagerDtoInput {
+  email: String!
+}
+
+input AddToCartDtoInput {
+  productId: UUID!
+  quantity: Int!
+}
+
+input BooleanOperationFilterInput {
+  eq: Boolean @cost(weight: "10")
+  neq: Boolean @cost(weight: "10")
+}
+
+input CategoryDtoFilterInput {
+  and: [CategoryDtoFilterInput!]
+  or: [CategoryDtoFilterInput!]
+  id: UuidOperationFilterInput
+  name: StringOperationFilterInput
+}
+
+input CategoryDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  name: SortEnumType @cost(weight: "10")
+}
+
+input CreateCategoryDtoInput {
+  name: String!
+}
+
+input CreateProductDtoInput {
+  name: String!
+  sku: String!
+  price: Decimal!
+  stock: Int!
+  categoryId: UUID!
+  sellerId: UUID!
+  description: String
+  imageUrl: String
+}
+
+input CreateReviewDtoInput {
+  productId: UUID!
+  rating: Int!
+  comment: String
+}
+
+input CreateSellerDtoInput {
+  name: String!
+}
+
+input DateTimeOperationFilterInput {
+  eq: DateTime @cost(weight: "10")
+  neq: DateTime @cost(weight: "10")
+  in: [DateTime] @cost(weight: "10")
+  nin: [DateTime] @cost(weight: "10")
+  gt: DateTime @cost(weight: "10")
+  ngt: DateTime @cost(weight: "10")
+  gte: DateTime @cost(weight: "10")
+  ngte: DateTime @cost(weight: "10")
+  lt: DateTime @cost(weight: "10")
+  nlt: DateTime @cost(weight: "10")
+  lte: DateTime @cost(weight: "10")
+  nlte: DateTime @cost(weight: "10")
+}
+
+input DecimalOperationFilterInput {
+  eq: Decimal @cost(weight: "10")
+  neq: Decimal @cost(weight: "10")
+  in: [Decimal] @cost(weight: "10")
+  nin: [Decimal] @cost(weight: "10")
+  gt: Decimal @cost(weight: "10")
+  ngt: Decimal @cost(weight: "10")
+  gte: Decimal @cost(weight: "10")
+  ngte: Decimal @cost(weight: "10")
+  lt: Decimal @cost(weight: "10")
+  nlt: Decimal @cost(weight: "10")
+  lte: Decimal @cost(weight: "10")
+  nlte: Decimal @cost(weight: "10")
+}
+
+input IntOperationFilterInput {
+  eq: Int @cost(weight: "10")
+  neq: Int @cost(weight: "10")
+  in: [Int] @cost(weight: "10")
+  nin: [Int] @cost(weight: "10")
+  gt: Int @cost(weight: "10")
+  ngt: Int @cost(weight: "10")
+  gte: Int @cost(weight: "10")
+  ngte: Int @cost(weight: "10")
+  lt: Int @cost(weight: "10")
+  nlt: Int @cost(weight: "10")
+  lte: Int @cost(weight: "10")
+  nlte: Int @cost(weight: "10")
+}
+
+input ListFilterInputTypeOfOrderItemDtoFilterInput {
+  all: OrderItemDtoFilterInput @cost(weight: "10")
+  none: OrderItemDtoFilterInput @cost(weight: "10")
+  some: OrderItemDtoFilterInput @cost(weight: "10")
+  any: Boolean @cost(weight: "10")
+}
+
+input OrderDtoFilterInput {
+  and: [OrderDtoFilterInput!]
+  or: [OrderDtoFilterInput!]
+  id: UuidOperationFilterInput
+  status: OrderStatusOperationFilterInput
+  totalAmount: DecimalOperationFilterInput
+  buyer: UserSummaryDtoFilterInput
+  seller: SellerDtoFilterInput
+  items: ListFilterInputTypeOfOrderItemDtoFilterInput
+  createdAt: DateTimeOperationFilterInput
+  shippedAt: DateTimeOperationFilterInput
+  deliveredAt: DateTimeOperationFilterInput
+  canceledAt: DateTimeOperationFilterInput
+}
+
+input OrderDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  status: SortEnumType @cost(weight: "10")
+  totalAmount: SortEnumType @cost(weight: "10")
+  buyer: UserSummaryDtoSortInput @cost(weight: "10")
+  seller: SellerDtoSortInput @cost(weight: "10")
+  createdAt: SortEnumType @cost(weight: "10")
+  shippedAt: SortEnumType @cost(weight: "10")
+  deliveredAt: SortEnumType @cost(weight: "10")
+  canceledAt: SortEnumType @cost(weight: "10")
+}
+
+input OrderItemDtoFilterInput {
+  and: [OrderItemDtoFilterInput!]
+  or: [OrderItemDtoFilterInput!]
+  productId: UuidOperationFilterInput
+  productName: StringOperationFilterInput
+  productSku: StringOperationFilterInput
+  unitPrice: DecimalOperationFilterInput
+  quantity: IntOperationFilterInput
+  lineTotal: DecimalOperationFilterInput
+}
+
+input OrderStatusOperationFilterInput {
+  eq: OrderStatus @cost(weight: "10")
+  neq: OrderStatus @cost(weight: "10")
+  in: [OrderStatus!] @cost(weight: "10")
+  nin: [OrderStatus!] @cost(weight: "10")
+}
+
+input ProductDtoFilterInput {
+  and: [ProductDtoFilterInput!]
+  or: [ProductDtoFilterInput!]
+  id: UuidOperationFilterInput
+  name: StringOperationFilterInput
+  sku: StringOperationFilterInput
+  price: DecimalOperationFilterInput
+  stock: IntOperationFilterInput
+  isActive: BooleanOperationFilterInput
+  rating: DecimalOperationFilterInput
+  reviewCount: IntOperationFilterInput
+  category: CategoryDtoFilterInput
+  seller: SellerDtoFilterInput
+  description: StringOperationFilterInput
+  imageUrl: StringOperationFilterInput
+}
+
+input ProductDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  name: SortEnumType @cost(weight: "10")
+  sku: SortEnumType @cost(weight: "10")
+  price: SortEnumType @cost(weight: "10")
+  stock: SortEnumType @cost(weight: "10")
+  isActive: SortEnumType @cost(weight: "10")
+  rating: SortEnumType @cost(weight: "10")
+  reviewCount: SortEnumType @cost(weight: "10")
+  category: CategoryDtoSortInput @cost(weight: "10")
+  seller: SellerDtoSortInput @cost(weight: "10")
+  description: SortEnumType @cost(weight: "10")
+  imageUrl: SortEnumType @cost(weight: "10")
+}
+
+input ProductSummaryDtoFilterInput {
+  and: [ProductSummaryDtoFilterInput!]
+  or: [ProductSummaryDtoFilterInput!]
+  id: UuidOperationFilterInput
+  name: StringOperationFilterInput
+}
+
+input ProductSummaryDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  name: SortEnumType @cost(weight: "10")
+}
+
+input ReviewDtoFilterInput {
+  and: [ReviewDtoFilterInput!]
+  or: [ReviewDtoFilterInput!]
+  id: UuidOperationFilterInput
+  rating: IntOperationFilterInput
+  comment: StringOperationFilterInput
+  author: UserSummaryDtoFilterInput
+  product: ProductSummaryDtoFilterInput
+  createdAt: DateTimeOperationFilterInput
+  updatedAt: DateTimeOperationFilterInput
+}
+
+input ReviewDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  rating: SortEnumType @cost(weight: "10")
+  comment: SortEnumType @cost(weight: "10")
+  author: UserSummaryDtoSortInput @cost(weight: "10")
+  product: ProductSummaryDtoSortInput @cost(weight: "10")
+  createdAt: SortEnumType @cost(weight: "10")
+  updatedAt: SortEnumType @cost(weight: "10")
+}
+
+input SellerDtoFilterInput {
+  and: [SellerDtoFilterInput!]
+  or: [SellerDtoFilterInput!]
+  id: UuidOperationFilterInput
+  name: StringOperationFilterInput
+  rating: DecimalOperationFilterInput
+}
+
+input SellerDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  name: SortEnumType @cost(weight: "10")
+  rating: SortEnumType @cost(weight: "10")
+}
+
+input StringOperationFilterInput {
+  and: [StringOperationFilterInput!]
+  or: [StringOperationFilterInput!]
+  eq: String @cost(weight: "10")
+  neq: String @cost(weight: "10")
+  contains: String @cost(weight: "20")
+  ncontains: String @cost(weight: "20")
+  in: [String] @cost(weight: "10")
+  nin: [String] @cost(weight: "10")
+  startsWith: String @cost(weight: "20")
+  nstartsWith: String @cost(weight: "20")
+  endsWith: String @cost(weight: "20")
+  nendsWith: String @cost(weight: "20")
+}
+
+input UpdateCartItemDtoInput {
+  productId: UUID!
+  quantity: Int!
+}
+
+input UpdateCategoryDtoInput {
+  name: String!
+}
+
+input UpdateProductDtoInput {
+  name: String!
+  price: Decimal!
+  stock: Int!
+  categoryId: UUID!
+  description: String
+  imageUrl: String
+}
+
+input UpdateReviewDtoInput {
+  rating: Int!
+  comment: String
+}
+
+input UpdateSellerDtoInput {
+  name: String!
+}
+
+input UserSummaryDtoFilterInput {
+  and: [UserSummaryDtoFilterInput!]
+  or: [UserSummaryDtoFilterInput!]
+  id: UuidOperationFilterInput
+  username: StringOperationFilterInput
+}
+
+input UserSummaryDtoSortInput {
+  id: SortEnumType @cost(weight: "10")
+  username: SortEnumType @cost(weight: "10")
+}
+
+input UuidOperationFilterInput {
+  eq: UUID @cost(weight: "10")
+  neq: UUID @cost(weight: "10")
+  in: [UUID] @cost(weight: "10")
+  nin: [UUID] @cost(weight: "10")
+  gt: UUID @cost(weight: "10")
+  ngt: UUID @cost(weight: "10")
+  gte: UUID @cost(weight: "10")
+  ngte: UUID @cost(weight: "10")
+  lt: UUID @cost(weight: "10")
+  nlt: UUID @cost(weight: "10")
+  lte: UUID @cost(weight: "10")
+  nlte: UUID @cost(weight: "10")
+}
+
+"Defines when a policy shall be executed."
+enum ApplyPolicy {
+  "Before the resolver was executed."
+  BEFORE_RESOLVER
+  "After the resolver was executed."
+  AFTER_RESOLVER
+  "The policy is applied in the validation step before the execution."
+  VALIDATION
+}
+
+enum OrderStatus {
+  CREATED
+  SHIPPED
+  DELIVERED
+  CANCELED
+}
+
+enum SellerMemberRole {
+  OWNER
+  MANAGER
+}
+
+enum SortEnumType {
+  ASC
+  DESC
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+"The `DateTime` scalar type represents a date and time with time zone offset information."
+scalar DateTime
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/date-time.html")
+
+"The `Decimal` scalar type represents a decimal floating-point number with high precision."
+scalar Decimal
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/decimal.html")
+
+"The `UUID` scalar type represents a Universally Unique Identifier (UUID) as defined by RFC 9562."
+scalar UUID
+  @specifiedBy(url: "https://scalars.graphql.org/chillicream/uuid.html")
+
+"The purpose of the `cost` directive is to define a `weight` for GraphQL types, fields, and arguments. Static analysis can use these weights when calculating the overall cost of a query or response."
+directive @cost(
+  "The `weight` argument defines what value to add to the overall cost for every appearance, or possible appearance, of a type, field, argument, etc."
+  weight: String!
+) on
+  | SCALAR
+  | OBJECT
+  | FIELD_DEFINITION
+  | ARGUMENT_DEFINITION
+  | ENUM
+  | INPUT_FIELD_DEFINITION
+
+"The purpose of the `@listSize` directive is to either inform the static analysis about the size of returned lists (if that information is statically available), or to point the analysis to where to find that information."
+directive @listSize(
+  "The `assumedSize` argument can be used to statically define the maximum length of a list returned by a field."
+  assumedSize: Int
+  "The `slicingArguments` argument can be used to define which of the field's arguments with numeric type are slicing arguments, so that their value determines the size of the list returned by that field. It may specify a list of multiple slicing arguments."
+  slicingArguments: [String!]
+  "The `slicingArgumentDefaultValue` argument can be used to define a default value for a slicing argument, which is used if the argument is not present in a query."
+  slicingArgumentDefaultValue: Int
+  "The `sizedFields` argument can be used to define that the value of the `assumedSize` argument or of a slicing argument does not affect the size of a list returned by a field itself, but that of a list returned by one of its sub-fields."
+  sizedFields: [String!]
+  "The `requireOneSlicingArgument` argument can be used to inform the static analysis that it should expect that exactly one of the defined slicing arguments is present in a query. If that is not the case (i.e., if none or multiple slicing arguments are present), the static analysis may throw an error."
+  requireOneSlicingArgument: Boolean = true
+) on FIELD_DEFINITION
