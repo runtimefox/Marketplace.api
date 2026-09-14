@@ -11,10 +11,20 @@ public class OrderMutations
 {
     [Authorize]
     public Task<IReadOnlyList<OrderDto>> Checkout(
+        CheckoutDto input,
         ClaimsPrincipal claimsPrincipal,
         IOrderService orders,
         CancellationToken ct) =>
-        orders.CheckoutAsync(claimsPrincipal.GetRequiredUserId(), ct);
+        orders.CheckoutAsync(claimsPrincipal.GetRequiredUserId(), input, ct);
+
+    [Authorize]
+    public Task<OrderDto?> UpdateOrderDeliveryAddress(
+        Guid id,
+        DeliveryAddressDto input,
+        ClaimsPrincipal claimsPrincipal,
+        IOrderService orders,
+        CancellationToken ct) =>
+        orders.UpdateDeliveryAddressAsync(claimsPrincipal.GetRequiredUserId(), id, input, ct);
 
     [Authorize]
     public Task<OrderDto?> ShipOrder(

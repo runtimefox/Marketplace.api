@@ -26,6 +26,8 @@ public class Order
     [Column("TotalAmount")]
     public decimal TotalAmount { get; private set; }
 
+    public DeliveryAddress DeliveryAddress { get; private set; } = null!;
+
     [Column("CreatedAt")]
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -49,7 +51,11 @@ public class Order
     {
     }
 
-    public static Order Create(Guid buyerId, Guid sellerId, IEnumerable<(Product Product, int Quantity)> lines)
+    public static Order Create(
+        Guid buyerId,
+        Guid sellerId,
+        DeliveryAddress deliveryAddress,
+        IEnumerable<(Product Product, int Quantity)> lines)
     {
         if (buyerId == Guid.Empty)
         {
@@ -61,6 +67,8 @@ public class Order
             throw new ArgumentException("Seller is required.", nameof(sellerId));
         }
 
+        ArgumentNullException.ThrowIfNull(deliveryAddress);
+
         var now = DateTimeOffset.UtcNow;
         var order = new Order
         {
@@ -68,6 +76,7 @@ public class Order
             BuyerId = buyerId,
             SellerId = sellerId,
             Status = OrderStatus.Created,
+            DeliveryAddress = deliveryAddress,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -83,6 +92,15 @@ public class Order
         }
 
         return order;
+    }
+
+    public void ChangeDeliveryAddress(DeliveryAddress deliveryAddress)
+    {
+        ArgumentNullException.ThrowIfNull(deliveryAddress);
+        EnsureStatus(OrderStatus.Created, "changed");
+
+        DeliveryAddress = deliveryAddress;
+        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public void Ship()

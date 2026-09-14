@@ -41,7 +41,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         return await GetOrderDtoAsync(id, ct);
     }
 
-    public async Task<IReadOnlyList<OrderDto>> CheckoutAsync(Guid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<OrderDto>> CheckoutAsync(Guid userId, CheckoutDto dto, CancellationToken ct = default)
     {
         var cartItems = await dbContext.CartItems
             .Include(x => x.Product)
@@ -56,7 +56,11 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
 
         var orders = cartItems
             .GroupBy(x => x.Product.SellerId)
-            .Select(group => Order.Create(userId, group.Key, group.Select(x => (x.Product, x.Quantity))))
+            .Select(group => Order.Create(
+                userId,
+                group.Key,
+                ToDeliveryAddress(dto.DeliveryAddress),
+                group.Select(x => (x.Product, x.Quantity))))
             .ToList();
 
         dbContext.Orders.AddRange(orders);
@@ -67,6 +71,26 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         var orderIds = orders.Select(x => x.Id).ToList();
 
         return await QueryOrders(x => orderIds.Contains(x.Id)).ToListAsync(ct);
+    }
+
+    public async Task<OrderDto?> UpdateDeliveryAddressAsync(
+        Guid userId, Guid id, DeliveryAddressDto dto, CancellationToken ct = default)
+    {
+        var order = await dbContext.Orders.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (order is null)
+        {
+            return null;
+        }
+
+        if (order.BuyerId != userId)
+        {
+            throw new UnauthorizedAccessException("Only the buyer can change the delivery address of an order.");
+        }
+
+        order.ChangeDeliveryAddress(ToDeliveryAddress(dto));
+        await SaveAsync(ct);
+
+        return await GetOrderDtoAsync(id, ct);
     }
 
     public async Task<OrderDto?> ShipOrderAsync(Guid userId, Guid id, CancellationToken ct = default)
@@ -133,6 +157,9 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
 
         throw new UnauthorizedAccessException("You do not have access to this order.");
     }
+
+    private static DeliveryAddress ToDeliveryAddress(DeliveryAddressDto dto) =>
+        new(dto.RecipientName, dto.Phone, dto.Country, dto.City, dto.AddressLine, dto.Apartment, dto.PostalCode, dto.Comment);
 
     private Task<OrderDto> GetOrderDtoAsync(Guid id, CancellationToken ct) =>
         QueryOrders(x => x.Id == id).FirstAsync(ct);
