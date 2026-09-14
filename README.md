@@ -10,7 +10,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - **Accounts** — registration, JWT in HttpOnly cookies, refresh token rotation with reuse detection, profile and password change, `Customer` / `Admin` roles
 - **Shops** — sign up as a seller, shop owner and managers, seller cabinet with all shop products and orders
 - **Catalog** — products and categories with paging, filtering and sorting
-- **Cart and orders** — checkout creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
+- **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
 - **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
 
 ## Tech stack
@@ -136,7 +136,7 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 |---|---|---|
 | Catalog | `products`, `productById`, `categories`, `categoryById` | `createCategory`, `updateCategory`, `deleteCategory` (admin) |
 | Shops | `sellers`, `sellerById`, `mySellers`, `sellerMembers`, `sellerProducts` | `createSeller`, `updateSeller`, `deleteSeller`, `addSellerManager`, `removeSellerMember`, `createProduct`, `updateProduct`, `activateProduct`, `deleteProduct` |
-| Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
+| Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `updateOrderDeliveryAddress`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
 | Reviews | `productReviews`, `myReviews`, `canReviewProduct` | `createReview`, `updateReview`, `deleteReview` |
 | Users | `users` (admin) | — |
 
