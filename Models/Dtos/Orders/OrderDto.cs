@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using MyApi.Models.Dtos.Sellers;
+using MyApi.Models.Dtos.Users;
 using MyApi.Models.Entities;
 
 namespace MyApi.Models.Dtos.Orders;
@@ -9,7 +10,7 @@ public record OrderDto
     public required Guid Id { get; init; }
     public required OrderStatus Status { get; init; }
     public required decimal TotalAmount { get; init; }
-    public required OrderBuyerDto Buyer { get; init; }
+    public required UserSummaryDto Buyer { get; init; }
     public required SellerDto Seller { get; init; }
     public required IReadOnlyList<OrderItemDto> Items { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
@@ -22,7 +23,7 @@ public record OrderDto
         Id = x.Id,
         Status = x.Status,
         TotalAmount = x.TotalAmount,
-        Buyer = new OrderBuyerDto
+        Buyer = new UserSummaryDto
         {
             Id = x.Buyer.Id,
             Username = x.Buyer.Username
