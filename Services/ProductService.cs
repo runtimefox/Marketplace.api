@@ -24,6 +24,16 @@ public class ProductService : IProductService
             .Where(x => includeInactive || x.IsActive)
             .Select(ProductDto.Projection);
 
+    public async Task<IQueryable<ProductDto>> QuerySellerProductsAsync(
+        Guid userId, Guid sellerId, CancellationToken ct = default)
+    {
+        await _sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
+
+        return _dbContext.Products
+            .Where(x => x.SellerId == sellerId)
+            .Select(ProductDto.Projection);
+    }
+
     public Task<ProductDto?> GetProductByIdAsync(Guid id, CancellationToken ct = default) =>
         Query(includeInactive: true).FirstOrDefaultAsync(x => x.Id == id, ct);
 
@@ -65,6 +75,22 @@ public class ProductService : IProductService
         product.ChangeImageUrl(dto.ImageUrl);
 
         await SaveAsync(ct);
+
+        return await Query(includeInactive: true).FirstAsync(x => x.Id == id, ct);
+    }
+
+    public async Task<ProductDto?> ActivateProductAsync(Guid userId, Guid id, CancellationToken ct = default)
+    {
+        var product = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (product is null)
+        {
+            return null;
+        }
+
+        await _sellerAccess.EnsureMemberAsync(userId, product.SellerId, ct);
+
+        product.Activate();
+        await _dbContext.SaveChangesAsync(ct);
 
         return await Query(includeInactive: true).FirstAsync(x => x.Id == id, ct);
     }

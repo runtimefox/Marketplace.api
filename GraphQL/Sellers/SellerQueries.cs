@@ -26,4 +26,12 @@ public class SellerQueries
         ClaimsPrincipal claimsPrincipal,
         ISellerService sellers) =>
         sellers.QueryMemberships(claimsPrincipal.GetRequiredUserId());
+
+    [Authorize]
+    public Task<IQueryable<SellerMemberDto>> GetSellerMembers(
+        Guid sellerId,
+        ClaimsPrincipal claimsPrincipal,
+        ISellerMemberService members,
+        CancellationToken ct) =>
+        members.QueryMembersAsync(claimsPrincipal.GetRequiredUserId(), sellerId, ct);
 }

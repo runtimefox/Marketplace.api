@@ -70,4 +70,32 @@ public class Seller
 
         Rating = decimal.Round(rating, 2);
     }
+
+    public SellerMember AddManager(Guid userAccountId)
+    {
+        if (_members.Any(x => x.UserAccountId == userAccountId))
+        {
+            throw new InvalidOperationException("User is already a member of this seller.");
+        }
+
+        var member = new SellerMember(Id, userAccountId, SellerMemberRole.Manager);
+        _members.Add(member);
+
+        return member;
+    }
+
+    public SellerMember RemoveMember(Guid userAccountId)
+    {
+        var member = _members.FirstOrDefault(x => x.UserAccountId == userAccountId)
+                     ?? throw new InvalidOperationException("User is not a member of this seller.");
+
+        if (member.Role == SellerMemberRole.Owner)
+        {
+            throw new InvalidOperationException("The owner cannot be removed from the seller.");
+        }
+
+        _members.Remove(member);
+
+        return member;
+    }
 }
