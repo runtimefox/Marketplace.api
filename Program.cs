@@ -6,14 +6,20 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using MyApi.GraphQL;
+using MyApi.GraphQL.Cart;
 using MyApi.GraphQL.Categories;
+using MyApi.GraphQL.Orders;
 using MyApi.GraphQL.Products;
+using MyApi.GraphQL.Reviews;
 using MyApi.GraphQL.Sellers;
 using MyApi.GraphQL.Users;
 using MyApi.Services;
 using MyApi.Services.Interfaces.Auth;
+using MyApi.Services.Interfaces.Cart;
 using MyApi.Services.Interfaces.Categories;
+using MyApi.Services.Interfaces.Orders;
 using MyApi.Services.Interfaces.Products;
+using MyApi.Services.Interfaces.Reviews;
 using MyApi.Services.Interfaces.Sellers;
 using MyApi.Services.Interfaces.Users;
 using MyApi.Shared.Auth;
@@ -84,6 +90,10 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ISellerService, SellerService>();
 builder.Services.AddScoped<ISellerAccessService, SellerAccessService>();
+builder.Services.AddScoped<ISellerMemberService, SellerMemberService>();
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -97,7 +107,7 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Вставь сюда токен из /api/auth/login (без слова Bearer)."
+        Description = "JWT access token without the \"Bearer\" prefix. Browser requests are authenticated by the access_token cookie set by /api/auth/login."
     });
 
     options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
@@ -114,6 +124,12 @@ builder.Services
     .AddTypeExtension<UserQueries>()
     .AddTypeExtension<CategoryQueries>()
     .AddTypeExtension<CategoryMutations>()
+    .AddTypeExtension<CartQueries>()
+    .AddTypeExtension<CartMutations>()
+    .AddTypeExtension<OrderQueries>()
+    .AddTypeExtension<OrderMutations>()
+    .AddTypeExtension<ReviewQueries>()
+    .AddTypeExtension<ReviewMutations>()
     .AddTypeExtension<ProductQueries>()
     .AddTypeExtension<ProductMutations>()
     .AddTypeExtension<SellerQueries>()

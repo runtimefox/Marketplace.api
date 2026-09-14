@@ -33,4 +33,22 @@ public class SellerMutations
         ISellerService sellers,
         CancellationToken ct) =>
         sellers.DeleteSellerAsync(claimsPrincipal.GetRequiredUserId(), id, ct);
+
+    [Authorize]
+    public Task<SellerMemberDto> AddSellerManager(
+        Guid sellerId,
+        AddSellerManagerDto input,
+        ClaimsPrincipal claimsPrincipal,
+        ISellerMemberService members,
+        CancellationToken ct) =>
+        members.AddManagerAsync(claimsPrincipal.GetRequiredUserId(), sellerId, input, ct);
+
+    [Authorize]
+    public Task<bool> RemoveSellerMember(
+        Guid sellerId,
+        Guid userId,
+        ClaimsPrincipal claimsPrincipal,
+        ISellerMemberService members,
+        CancellationToken ct) =>
+        members.RemoveMemberAsync(claimsPrincipal.GetRequiredUserId(), sellerId, userId, ct);
 }

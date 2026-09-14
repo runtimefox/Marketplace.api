@@ -3,18 +3,18 @@ using MyApi.Models.Entities;
 
 namespace MyApi.Shared.Data;
 
-public class AppDbContext: DbContext
+public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
-    {
-    }
-
     public DbSet<UserAccount> UserAccounts { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<Product> Products { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<Seller> Sellers { get; set; }
     public DbSet<SellerMember> SellerMembers { get; set; }
+    public DbSet<CartItem> CartItems { get; set; }
+    public DbSet<Order> Orders { get; set; }
+    public DbSet<OrderItem> OrderItems { get; set; }
+    public DbSet<Review> Reviews { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -98,5 +98,89 @@ public class AppDbContext: DbContext
             .WithMany()
             .HasForeignKey(x => x.UserAccountId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Product>()
+            .Property(x => x.Version)
+            .IsRowVersion();
+
+        modelBuilder.Entity<CartItem>()
+            .HasIndex(x => new { x.UserAccountId, x.ProductId })
+            .IsUnique();
+
+        modelBuilder.Entity<CartItem>()
+            .HasOne(x => x.UserAccount)
+            .WithMany()
+            .HasForeignKey(x => x.UserAccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CartItem>()
+            .HasOne(x => x.Product)
+            .WithMany()
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Order>()
+            .Property(x => x.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Order>()
+            .Property(x => x.TotalAmount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Order>()
+            .HasIndex(x => new { x.BuyerId, x.CreatedAt });
+
+        modelBuilder.Entity<Order>()
+            .HasIndex(x => new { x.SellerId, x.Status });
+
+        modelBuilder.Entity<Order>()
+            .HasOne(x => x.Buyer)
+            .WithMany()
+            .HasForeignKey(x => x.BuyerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Order>()
+            .HasOne(x => x.Seller)
+            .WithMany()
+            .HasForeignKey(x => x.SellerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Order>()
+            .HasMany(x => x.Items)
+            .WithOne()
+            .HasForeignKey(x => x.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OrderItem>()
+            .Property(x => x.UnitPrice)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<OrderItem>()
+            .HasOne(x => x.Product)
+            .WithMany()
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Review>()
+            .HasIndex(x => new { x.ProductId, x.UserAccountId })
+            .IsUnique();
+
+        modelBuilder.Entity<Review>()
+            .HasOne(x => x.Product)
+            .WithMany(x => x.Reviews)
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Review>()
+            .HasOne(x => x.UserAccount)
+            .WithMany()
+            .HasForeignKey(x => x.UserAccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Review>()
+            .ToTable(t => t.HasCheckConstraint(
+                "CK_Reviews_Rating",
+                $"\"Rating\" >= {Review.MinRating} AND \"Rating\" <= {Review.MaxRating}"));
     }
 }

@@ -1,6 +1,238 @@
 @MyApi_HostAddress = http://localhost:5086
+@productId = 00000000-0000-0000-0000-000000000000
+@sellerId = 00000000-0000-0000-0000-000000000000
+@orderId = 00000000-0000-0000-0000-000000000000
+@reviewId = 00000000-0000-0000-0000-000000000000
 
-GET {{MyApi_HostAddress}}/weatherforecast/
-Accept: application/json
+### Register a buyer
+POST {{MyApi_HostAddress}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "username": "new_buyer",
+  "email": "new_buyer@myapi.dev",
+  "password": "Password123"
+}
+
+### Register a seller (account and shop)
+POST {{MyApi_HostAddress}}/api/auth/register-seller
+Content-Type: application/json
+
+{
+  "username": "new_seller",
+  "email": "new_seller@myapi.dev",
+  "password": "Password123",
+  "sellerName": "New Shop"
+}
+
+### Log in as the demo buyer
+POST {{MyApi_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "buyer@myapi.dev",
+  "password": "Password123"
+}
+
+### Log in as the TechStore owner
+POST {{MyApi_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "techstore@myapi.dev",
+  "password": "Password123"
+}
+
+### Log in as the platform admin
+POST {{MyApi_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@myapi.dev",
+  "password": "Password123"
+}
+
+### Current user
+GET {{MyApi_HostAddress}}/api/auth/me
+
+### Update profile
+PUT {{MyApi_HostAddress}}/api/auth/me
+Content-Type: application/json
+
+{
+  "username": "demo_buyer",
+  "email": "buyer@myapi.dev"
+}
+
+### Change password
+PUT {{MyApi_HostAddress}}/api/auth/me/password
+Content-Type: application/json
+
+{
+  "currentPassword": "Password123",
+  "newPassword": "NewPassword456"
+}
+
+### Refresh tokens
+POST {{MyApi_HostAddress}}/api/auth/refresh
+
+### Log out
+POST {{MyApi_HostAddress}}/api/auth/revoke
+
+### All users (admin only)
+GET {{MyApi_HostAddress}}/api/user
+
+### GraphQL: products
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ products(first: 5, order: { price: DESC }) { totalCount nodes { id name price stock category { name } seller { id name rating } } } }"
+}
+
+### GraphQL: categories
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ categories(order: { name: ASC }) { id name } }"
+}
+
+### GraphQL: my shops
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ mySellers { seller { id name rating } role } }"
+}
+
+### GraphQL: shop products including inactive (shop members)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($sellerId: UUID!) { sellerProducts(sellerId: $sellerId) { totalCount nodes { id name isActive stock } } }",
+  "variables": { "sellerId": "{{sellerId}}" }
+}
+
+### GraphQL: add to cart
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($productId: UUID!) { addToCart(input: { productId: $productId, quantity: 1 }) { totalQuantity totalPrice items { product { name } quantity lineTotal isAvailable } } }",
+  "variables": { "productId": "{{productId}}" }
+}
+
+### GraphQL: my cart
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ myCart { totalQuantity totalPrice items { product { id name price } quantity lineTotal isAvailable } } }"
+}
+
+### GraphQL: checkout
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation { checkout { id status totalAmount seller { name } items { productName unitPrice quantity lineTotal } } }"
+}
+
+### GraphQL: my orders
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ myOrders(first: 10) { totalCount nodes { id status totalAmount createdAt seller { name } items { productName quantity } } } }"
+}
+
+### GraphQL: shop orders (shop members)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($sellerId: UUID!) { sellerOrders(sellerId: $sellerId, where: { status: { eq: CREATED } }) { totalCount nodes { id status totalAmount buyer { username } } } }",
+  "variables": { "sellerId": "{{sellerId}}" }
+}
+
+### GraphQL: ship order (shop members)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($orderId: UUID!) { shipOrder(id: $orderId) { id status shippedAt } }",
+  "variables": { "orderId": "{{orderId}}" }
+}
+
+### GraphQL: confirm delivery (buyer)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($orderId: UUID!) { confirmOrderDelivery(id: $orderId) { id status deliveredAt } }",
+  "variables": { "orderId": "{{orderId}}" }
+}
+
+### GraphQL: cancel order (buyer or shop members)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($orderId: UUID!) { cancelOrder(id: $orderId) { id status canceledAt } }",
+  "variables": { "orderId": "{{orderId}}" }
+}
+
+### GraphQL: product reviews
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { productReviews(productId: $productId, first: 10) { totalCount nodes { id rating comment createdAt author { username } } } }",
+  "variables": { "productId": "{{productId}}" }
+}
+
+### GraphQL: can the current user review a product
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { canReviewProduct(productId: $productId) }",
+  "variables": { "productId": "{{productId}}" }
+}
+
+### GraphQL: create review (buyer with a delivered order)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($productId: UUID!, $comment: String) { createReview(input: { productId: $productId, rating: 5, comment: $comment }) { id rating comment product { name } } }",
+  "variables": { "productId": "{{productId}}", "comment": "Great product" }
+}
+
+### GraphQL: update review (author)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($reviewId: UUID!, $comment: String) { updateReview(id: $reviewId, input: { rating: 4, comment: $comment }) { id rating comment updatedAt } }",
+  "variables": { "reviewId": "{{reviewId}}", "comment": "Good, but pricey" }
+}
+
+### GraphQL: delete review (author or admin)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($reviewId: UUID!) { deleteReview(id: $reviewId) }",
+  "variables": { "reviewId": "{{reviewId}}" }
+}
+
+### GraphQL: my reviews
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ myReviews(first: 10) { totalCount nodes { id rating comment product { name } } } }"
+}

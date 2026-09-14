@@ -11,38 +11,30 @@ namespace MyApi.Controllers;
 [ApiController]
 [Route("api/auth")]
 
-public class AuthController : ControllerBase
+public class AuthController(
+    IAuthService authService,
+    IUserService userService,
+    IWebHostEnvironment environment) : ControllerBase
 {
-    private readonly IAuthService _authService;
-    private readonly IUserService _userService;
-    private readonly IWebHostEnvironment _environment;
-
-    public AuthController(
-        IAuthService authService,
-        IUserService userService,
-        IWebHostEnvironment environment)
-    {
-        _authService = authService;
-        _userService = userService;
-        _environment = environment;
-    }
+    private const string MissingUserId = "The token does not contain a user identifier.";
+    private const string UserNotFound = "User not found.";
 
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponseDto>> Register(CreateUserDto createUser)
     {
-        return Respond(await _authService.RegisterAsync(createUser));
+        return Respond(await authService.RegisterAsync(createUser));
     }
 
     [HttpPost("register-seller")]
     public async Task<ActionResult<AuthResponseDto>> RegisterSeller(RegisterSellerDto registerSeller)
     {
-        return Respond(await _authService.RegisterSellerAsync(registerSeller));
+        return Respond(await authService.RegisterSellerAsync(registerSeller));
     }
 
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto login)
     {
-        return Respond(await _authService.LoginAsync(login));
+        return Respond(await authService.LoginAsync(login));
     }
 
     [Authorize]
@@ -51,14 +43,42 @@ public class AuthController : ControllerBase
     {
         if (!User.TryGetUserId(out var userId))
         {
-            return Unauthorized("The token does not contain a user identifier.");
+            return Unauthorized(MissingUserId);
         }
 
-        var result = await _userService.GetUserByIdAsync(userId);
+        var result = await userService.GetUserByIdAsync(userId);
 
         return result.Result is NotFoundResult
-            ? Unauthorized("User not found.")
+            ? Unauthorized(UserNotFound)
             : result;
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<ActionResult<UserDto>> UpdateMe(UpdateProfileDto updateProfile)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(MissingUserId);
+        }
+
+        var result = await userService.UpdateProfileAsync(userId, updateProfile);
+
+        return result.Result is NotFoundResult
+            ? Unauthorized(UserNotFound)
+            : result;
+    }
+
+    [Authorize]
+    [HttpPut("me/password")]
+    public async Task<ActionResult<AuthResponseDto>> ChangePassword(ChangePasswordDto changePassword)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(MissingUserId);
+        }
+
+        return Respond(await authService.ChangePasswordAsync(userId, changePassword));
     }
 
     [HttpPost("refresh")]
@@ -70,7 +90,7 @@ public class AuthController : ControllerBase
             return Unauthorized("Refresh token was not provided.");
         }
 
-        return Respond(await _authService.RefreshAsync(refreshToken));
+        return Respond(await authService.RefreshAsync(refreshToken));
     }
 
     [HttpPost("revoke")]
@@ -79,7 +99,7 @@ public class AuthController : ControllerBase
         if (Request.Cookies.TryGetValue(AuthCookies.RefreshToken, out var refreshToken)
             && !string.IsNullOrEmpty(refreshToken))
         {
-            await _authService.RevokeAsync(refreshToken);
+            await authService.RevokeAsync(refreshToken);
         }
 
         DeleteAuthCookies();
@@ -118,7 +138,7 @@ public class AuthController : ControllerBase
     private CookieOptions BuildOptions(string path, DateTime? expiresAt) => new()
     {
         HttpOnly = true,
-        Secure = !_environment.IsDevelopment(),
+        Secure = !environment.IsDevelopment(),
         SameSite = SameSiteMode.Strict,
         Path = path,
         Expires = expiresAt is null ? null : new DateTimeOffset(expiresAt.Value, TimeSpan.Zero)

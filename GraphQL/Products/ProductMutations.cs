@@ -27,6 +27,14 @@ public class ProductMutations
         products.UpdateProductAsync(claimsPrincipal.GetRequiredUserId(), id, input, ct);
 
     [Authorize]
+    public Task<ProductDto?> ActivateProduct(
+        Guid id,
+        ClaimsPrincipal claimsPrincipal,
+        IProductService products,
+        CancellationToken ct) =>
+        products.ActivateProductAsync(claimsPrincipal.GetRequiredUserId(), id, ct);
+
+    [Authorize]
     public Task<bool> DeleteProduct(
         Guid id,
         ClaimsPrincipal claimsPrincipal,

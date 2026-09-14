@@ -5,24 +5,18 @@ using MyApi.Models.Dtos.Users;
 using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Auth;
 using MyApi.Services.Interfaces.Users;
+using MyApi.Shared.Auth;
 using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class UserService : IUserService
+public class UserService(AppDbContext dbContext, IPasswordHasher passwordHasher) : IUserService
 {
-    private readonly AppDbContext _dbContext;
-    private readonly IPasswordHasher _passwordHasher;
-
-    public UserService(AppDbContext dbContext, IPasswordHasher passwordHasher)
-    {
-        _dbContext = dbContext;
-        _passwordHasher = passwordHasher;
-    }
+    private const string UsernameOrEmailTaken = "This username or email is already taken.";
 
     public async Task<ActionResult<UserDto>> GetUserByIdAsync(Guid id)
     {
-        var user = await _dbContext.UserAccounts
+        var user = await dbContext.UserAccounts
             .Where(x => x.Id == id)
             .Select(UserDto.Projection)
             .FirstOrDefaultAsync();
@@ -32,7 +26,7 @@ public class UserService : IUserService
 
     public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsersAsync()
     {
-        var users = await _dbContext.UserAccounts
+        var users = await dbContext.UserAccounts
             .Select(UserDto.Projection)
             .ToListAsync();
 
@@ -41,93 +35,80 @@ public class UserService : IUserService
 
     public async Task<ActionResult<UserDto>> CreateUserAsync(CreateUserDto createUser)
     {
-        var invalidPassword = ValidatePassword(createUser.Password);
-        if (invalidPassword is not null)
+        var passwordError = PasswordPolicy.Validate(createUser.Password);
+        if (passwordError is not null)
         {
-            return invalidPassword;
+            return new BadRequestObjectResult(passwordError);
         }
 
-        var usernameTaken = await _dbContext.UserAccounts
-            .AnyAsync(x => x.Username == createUser.Username);
-        if (usernameTaken)
+        var conflict = await FindConflictAsync(null, createUser.Username, createUser.Email);
+        if (conflict is not null)
         {
-            return new ConflictObjectResult($"User \"{createUser.Username}\" already exists.");
-        }
-
-        var emailTaken = await _dbContext.UserAccounts
-            .AnyAsync(x => x.Email == createUser.Email);
-        if (emailTaken)
-        {
-            return new ConflictObjectResult($"Email \"{createUser.Email}\" is already taken.");
+            return conflict;
         }
 
         var user = new UserAccount(
             createUser.Username,
             createUser.Email,
-            _passwordHasher.Hash(createUser.Password));
+            passwordHasher.Hash(createUser.Password));
 
-        _dbContext.UserAccounts.Add(user);
+        dbContext.UserAccounts.Add(user);
 
         try
         {
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
-            return new ConflictObjectResult("This username or email is already taken.");
+            return new ConflictObjectResult(UsernameOrEmailTaken);
         }
 
         return UserDto.FromEntity(user);
     }
 
-    public async Task<ActionResult<UserDto>> UpdateUserAsync(Guid id, CreateUserDto updateUser)
+    public async Task<ActionResult<UserDto>> UpdateProfileAsync(Guid id, UpdateProfileDto updateProfile)
     {
-        var invalidPassword = ValidatePassword(updateUser.Password);
-        if (invalidPassword is not null)
-        {
-            return invalidPassword;
-        }
-
-        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == id);
+        var user = await dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == id);
         if (user is null)
         {
             return new NotFoundResult();
         }
 
-        user.ChangeUsername(updateUser.Username);
-        user.ChangeEmail(updateUser.Email);
-        user.SetPasswordHash(_passwordHasher.Hash(updateUser.Password));
-        await _dbContext.SaveChangesAsync();
+        var conflict = await FindConflictAsync(id, updateProfile.Username, updateProfile.Email);
+        if (conflict is not null)
+        {
+            return conflict;
+        }
+
+        user.ChangeUsername(updateProfile.Username);
+        user.ChangeEmail(updateProfile.Email);
+
+        try
+        {
+            await dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            return new ConflictObjectResult(UsernameOrEmailTaken);
+        }
 
         return UserDto.FromEntity(user);
     }
 
-    public async Task<ActionResult<UserDto>> DeleteUserAsync(Guid id)
+    private async Task<ActionResult?> FindConflictAsync(Guid? excludeUserId, string username, string email)
     {
-        var user = await _dbContext.UserAccounts.FirstOrDefaultAsync(x => x.Id == id);
-        if (user is null)
+        var usernameTaken = await dbContext.UserAccounts
+            .AnyAsync(x => x.Id != excludeUserId && x.Username == username);
+        if (usernameTaken)
         {
-            return new NotFoundResult();
+            return new ConflictObjectResult($"User \"{username}\" already exists.");
         }
 
-        _dbContext.UserAccounts.Remove(user);
-        await _dbContext.SaveChangesAsync();
-
-        return UserDto.FromEntity(user);
-    }
-
-    private static ActionResult? ValidatePassword(string password)
-    {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < UserAccount.PasswordMinLength)
+        var emailTaken = await dbContext.UserAccounts
+            .AnyAsync(x => x.Id != excludeUserId && x.Email == email);
+        if (emailTaken)
         {
-            return new BadRequestObjectResult(
-                $"Password must be at least {UserAccount.PasswordMinLength} characters long.");
-        }
-
-        if (password.Length > UserAccount.RawPasswordMaxLength)
-        {
-            return new BadRequestObjectResult(
-                $"Password must not exceed {UserAccount.RawPasswordMaxLength} characters.");
+            return new ConflictObjectResult($"Email \"{email}\" is already taken.");
         }
 
         return null;
@@ -135,5 +116,4 @@ public class UserService : IUserService
 
     private static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: "23505" };
-
 }
