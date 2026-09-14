@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MyApi.Models.Dtos.Auth;
 using MyApi.Models.Dtos.Users;
 using MyApi.Services.Interfaces.Auth;
@@ -19,18 +20,21 @@ public class AuthController(
     private const string MissingUserId = "The token does not contain a user identifier.";
     private const string UserNotFound = "User not found.";
 
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponseDto>> Register(CreateUserDto createUser)
     {
         return Respond(await authService.RegisterAsync(createUser));
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [HttpPost("register-seller")]
     public async Task<ActionResult<AuthResponseDto>> RegisterSeller(RegisterSellerDto registerSeller)
     {
         return Respond(await authService.RegisterSellerAsync(registerSeller));
     }
 
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto login)
     {
@@ -70,6 +74,7 @@ public class AuthController(
     }
 
     [Authorize]
+    [EnableRateLimiting(RateLimitPolicies.Auth)]
     [HttpPut("me/password")]
     public async Task<ActionResult<AuthResponseDto>> ChangePassword(ChangePasswordDto changePassword)
     {
