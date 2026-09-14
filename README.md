@@ -98,6 +98,13 @@ In the Development environment the database is seeded on startup. All demo accou
 
 Tokens are returned only in cookies. Sign in once through Swagger or `MyApi.http`, and the cookies are sent with the following REST and GraphQL requests.
 
+Registration, sign-in and password change are limited to 10 requests per minute per IP (`RateLimiting:Auth`); extra requests get `429 Too Many Requests` with a `Retry-After` header.
+
+### Frontend
+
+- Browser origins allowed by CORS are set in `Frontend:AllowedOrigins` (Development: `http://localhost:3000`, `http://localhost:5173`). Send requests with credentials, e.g. `fetch(url, { credentials: "include" })`, so the auth cookies are included.
+- The GraphQL schema is committed as [`schema.graphql`](schema.graphql) for code generation (for example GraphQL Code Generator). A test fails when the file is outdated; regenerate it with `UPDATE_SCHEMA=1 dotnet test tests/MyApi.Tests --filter SchemaSnapshotTests`.
+
 ### GraphQL
 
 | Area | Queries | Mutations |
