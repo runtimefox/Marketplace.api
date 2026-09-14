@@ -17,5 +17,35 @@ services:
       timeout: 5s
       retries: 5
 
+  migrations:
+    profiles: [app]
+    build:
+      context: .
+      target: migrations
+    image: myapi-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - --connection
+      - Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+
+  api:
+    profiles: [app]
+    build:
+      context: .
+      target: api
+    image: myapi-api
+    restart: unless-stopped
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__DbConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY:-}
+      Frontend__AllowedOrigins__0: ${FRONTEND_ORIGIN:-http://localhost:5173}
+    ports:
+      - "${API_PORT:-8080}:8080"
+
 volumes:
   pgdata:
