@@ -17,6 +17,36 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: myapi-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-myapi-images}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" > /dev/null; do sleep 1; done &&
+        mc mb --ignore-existing "local/$$STORAGE_BUCKET" &&
+        mc anonymous set download "local/$$STORAGE_BUCKET"
+
   migrations:
     profiles: [app]
     build:
@@ -40,12 +70,20 @@ services:
     depends_on:
       migrations:
         condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
     environment:
       ConnectionStrings__DbConnection: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Jwt__Key: ${JWT_KEY:-}
       Frontend__AllowedOrigins__0: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      Storage__ServiceUrl: http://minio:9000
+      Storage__PublicBaseUrl: ${STORAGE_PUBLIC_URL:-http://localhost:9000}/${STORAGE_BUCKET:-myapi-images}
+      Storage__BucketName: ${STORAGE_BUCKET:-myapi-images}
+      Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "${API_PORT:-8080}:8080"
 
 volumes:
   pgdata:
+  miniodata:
