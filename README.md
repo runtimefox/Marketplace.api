@@ -12,6 +12,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - **Catalog** — products and categories with paging, filtering and sorting
 - **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
 - **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
+- **Images** — product galleries (up to 10 photos), shop logos and user avatars; uploads are validated, converted to WebP in two sizes and stored in S3-compatible storage
 
 ## Tech stack
 
@@ -21,6 +22,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 | API | GraphQL (HotChocolate 16), REST controllers for authentication |
 | Data | PostgreSQL 17, Entity Framework Core 10 (Npgsql) |
 | Auth | JWT bearer tokens stored in HttpOnly cookies |
+| Files | MinIO (S3-compatible) via AWSSDK.S3, SkiaSharp for image processing |
 | Tests | xUnit, `WebApplicationFactory`, Testcontainers |
 | CI | GitHub Actions |
 
@@ -32,7 +34,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - [Docker](https://www.docker.com/)
 - EF Core CLI: `dotnet tool install --global dotnet-ef --version 10.0.12`
 
-### 1. Start PostgreSQL
+### 1. Start PostgreSQL and MinIO
 
 Create a `.env` file in the repository root:
 
@@ -46,6 +48,8 @@ POSTGRES_PORT=5432
 ```bash
 docker compose up -d
 ```
+
+This starts PostgreSQL and MinIO; the one-off `minio-init` container creates the public `myapi-images` bucket. The MinIO console is at http://localhost:9001 (`minioadmin` / `minioadmin` unless `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` are set in `.env`). `appsettings.Development.json` already points the API at this MinIO.
 
 ### 2. Configure secrets
 
@@ -86,7 +90,7 @@ FRONTEND_ORIGIN=http://localhost:5173
 docker compose --profile app up --build
 ```
 
-Compose waits for PostgreSQL, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data and no Swagger.
+Compose waits for PostgreSQL and MinIO, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data and no Swagger.
 
 To apply migrations to another database with the image:
 
@@ -120,6 +124,11 @@ In the Development environment the database is seeded on startup. All demo accou
 | GET / PUT | `/api/auth/me` | Current user profile |
 | PUT | `/api/auth/me/password` | Change password, signs out other sessions |
 | GET | `/api/user`, `/api/user/{id}` | Users (admin only) |
+| PUT / DELETE | `/api/auth/me/avatar` | Upload or remove the current user's avatar |
+| POST | `/api/products/{productId}/images` | Upload a product photo (shop members) |
+| PUT | `/api/products/{productId}/images/order` | Reorder photos: `{ "imageIds": [...] }`, the first one is the main image |
+| DELETE | `/api/products/{productId}/images/{imageId}` | Remove a product photo |
+| PUT / DELETE | `/api/sellers/{sellerId}/logo` | Upload or remove a shop logo (shop owner) |
 
 Tokens are returned only in cookies. Sign in once through Swagger or `MyApi.http`, and the cookies are sent with the following REST and GraphQL requests.
 
@@ -130,6 +139,13 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 - Browser origins allowed by CORS are set in `Frontend:AllowedOrigins` (Development: `http://localhost:3000`, `http://localhost:5173`). Send requests with credentials, e.g. `fetch(url, { credentials: "include" })`, so the auth cookies are included.
 - The GraphQL schema is committed as [`schema.graphql`](schema.graphql) for code generation (for example GraphQL Code Generator). A test fails when the file is outdated; regenerate it with `UPDATE_SCHEMA=1 dotnet test tests/MyApi.Tests --filter SchemaSnapshotTests`.
 
+### Images
+
+- Files are uploaded through REST as `multipart/form-data` with a single `file` field (JPEG, PNG or WebP, up to 10 MB).
+- Every upload is checked by its real content, rotated according to EXIF, stripped of metadata and stored as WebP in two sizes: products 320 / 1280 px, shop logos 128 / 512 px, avatars 96 / 512 px (the longer side, never upscaled).
+- GraphQL exposes URLs only: `images { id position smallUrl largeUrl }` and `mainImage` on products, `logo` on shops, `avatar` on users and review authors.
+- A product has up to 10 photos. Replaced and deleted images are removed from storage.
+
 ### GraphQL
 
 | Area | Queries | Mutations |
@@ -138,7 +154,7 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 | Shops | `sellers`, `sellerById`, `mySellers`, `sellerMembers`, `sellerProducts` | `createSeller`, `updateSeller`, `deleteSeller`, `addSellerManager`, `removeSellerMember`, `createProduct`, `updateProduct`, `activateProduct`, `deleteProduct` |
 | Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `updateOrderDeliveryAddress`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
 | Reviews | `productReviews`, `myReviews`, `canReviewProduct` | `createReview`, `updateReview`, `deleteReview` |
-| Users | `users` (admin) | — |
+| Users | `me`, `users` (admin) | — |
 
 ```graphql
 {

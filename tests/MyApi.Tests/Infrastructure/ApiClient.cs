@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
@@ -15,6 +16,23 @@ public sealed class ApiClient(HttpClient http)
         body is null ? http.PostAsync(url, null) : http.PostAsJsonAsync(url, body);
 
     public Task<HttpResponseMessage> PutAsync(string url, object body) => http.PutAsJsonAsync(url, body);
+
+    public Task<HttpResponseMessage> DeleteAsync(string url) => http.DeleteAsync(url);
+
+    public Task<HttpResponseMessage> UploadAsync(HttpMethod method, string url, byte[] content, string contentType)
+    {
+        var file = new ByteArrayContent(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        var form = new MultipartFormDataContent { { file, "file", "image" } };
+
+        return http.SendAsync(new HttpRequestMessage(method, url) { Content = form });
+    }
+
+    public static async Task<JsonNode> ReadJsonAsync(HttpResponseMessage response)
+    {
+        return JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+    }
 
     public Task<HttpResponseMessage> LoginAsync(string email, string password = TestData.Password) =>
         PostAsync("/api/auth/login", new { email, password });

@@ -3,6 +3,7 @@
 @sellerId = 00000000-0000-0000-0000-000000000000
 @orderId = 00000000-0000-0000-0000-000000000000
 @reviewId = 00000000-0000-0000-0000-000000000000
+@imageId = 00000000-0000-0000-0000-000000000000
 
 ### Register a buyer
 POST {{MyApi_HostAddress}}/api/auth/register
@@ -268,4 +269,68 @@ Content-Type: application/json
 
 {
   "query": "{ myReviews(first: 10) { totalCount nodes { id rating comment product { name } } } }"
+}
+
+### GraphQL: current user with avatar
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ me { id username email role avatar { smallUrl largeUrl } } }"
+}
+
+### Upload avatar (put an image next to this file as photo.jpg)
+PUT {{MyApi_HostAddress}}/api/auth/me/avatar
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### Delete avatar
+DELETE {{MyApi_HostAddress}}/api/auth/me/avatar
+
+### Upload product photo (shop members)
+POST {{MyApi_HostAddress}}/api/products/{{productId}}/images
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### Reorder product photos (the first one becomes the main image)
+PUT {{MyApi_HostAddress}}/api/products/{{productId}}/images/order
+Content-Type: application/json
+
+{
+  "imageIds": ["{{imageId}}"]
+}
+
+### Delete product photo
+DELETE {{MyApi_HostAddress}}/api/products/{{productId}}/images/{{imageId}}
+
+### Upload shop logo (shop owner)
+PUT {{MyApi_HostAddress}}/api/sellers/{{sellerId}}/logo
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### GraphQL: product photos
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { productById(id: $productId) { name mainImage { smallUrl largeUrl } images { id position smallUrl largeUrl } seller { name logo { smallUrl } } } }",
+  "variables": { "productId": "{{productId}}" }
 }

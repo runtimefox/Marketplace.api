@@ -3,6 +3,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +14,7 @@ using Microsoft.OpenApi;
 using MyApi.GraphQL;
 using MyApi.GraphQL.Cart;
 using MyApi.GraphQL.Categories;
+using MyApi.GraphQL.Images;
 using MyApi.GraphQL.Orders;
 using MyApi.GraphQL.Products;
 using MyApi.GraphQL.Reviews;
@@ -21,6 +24,7 @@ using MyApi.Services;
 using MyApi.Services.Interfaces.Auth;
 using MyApi.Services.Interfaces.Cart;
 using MyApi.Services.Interfaces.Categories;
+using MyApi.Services.Interfaces.Images;
 using MyApi.Services.Interfaces.Orders;
 using MyApi.Services.Interfaces.Products;
 using MyApi.Services.Interfaces.Reviews;
@@ -29,11 +33,12 @@ using MyApi.Services.Interfaces.Users;
 using MyApi.Shared.Auth;
 using MyApi.Shared.Configuration;
 using MyApi.Shared.Data;
+using MyApi.Shared.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
-    .AddControllers()
+    .AddControllers(options => options.Filters.Add<DomainExceptionFilter>())
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
@@ -151,6 +156,34 @@ builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<IProductImageService, ProductImageService>();
+builder.Services.AddScoped<IProfileImageService, ProfileImageService>();
+builder.Services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
+builder.Services.AddSingleton<IImageStorage, ImageStorage>();
+builder.Services.AddSingleton<IImageUrlBuilder, ImageUrlBuilder>();
+builder.Services.AddSingleton<IFileStorage, S3FileStorage>();
+
+builder.Services
+    .AddOptions<StorageOptions>()
+    .Bind(builder.Configuration.GetSection(StorageOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IAmazonS3>(services =>
+{
+    var storage = services.GetRequiredService<IOptions<StorageOptions>>().Value;
+
+    return new AmazonS3Client(
+        new BasicAWSCredentials(storage.AccessKey, storage.SecretKey),
+        new AmazonS3Config
+        {
+            ServiceURL = storage.ServiceUrl,
+            AuthenticationRegion = storage.Region,
+            ForcePathStyle = true,
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+        });
+});
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -188,6 +221,11 @@ builder.Services
     .AddTypeExtension<ProductMutations>()
     .AddTypeExtension<SellerQueries>()
     .AddTypeExtension<SellerMutations>()
+    .AddTypeExtension<ProductImageFields>()
+    .AddTypeExtension<ProductImageUrlFields>()
+    .AddTypeExtension<SellerLogoField>()
+    .AddTypeExtension<UserAvatarField>()
+    .AddTypeExtension<UserSummaryAvatarField>()
     .AddFiltering()
     .AddSorting()
     .AddErrorFilter<DomainErrorFilter>();

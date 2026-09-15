@@ -98,7 +98,6 @@ public static class Seed
     {
         var product = new Product(name, sku, price, stock, category.Id, seller.Id);
         product.ChangeDescription(description);
-        product.ChangeImageUrl($"https://picsum.photos/seed/{sku.ToLowerInvariant()}/600/600");
 
         return product;
     }

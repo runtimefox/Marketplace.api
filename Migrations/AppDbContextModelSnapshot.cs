@@ -204,11 +204,6 @@ namespace MyApi.Migrations
                         .HasColumnType("character varying(4000)")
                         .HasColumnName("Description");
 
-                    b.Property<string>("ImageUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("ImageUrl");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("IsActive");
@@ -258,6 +253,38 @@ namespace MyApi.Migrations
                     b.HasIndex("CategoryId", "IsActive");
 
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("MyApi.Models.Entities.ProductImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("Position");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ProductId");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("StorageKey");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Position");
+
+                    b.ToTable("ProductImages");
                 });
 
             modelBuilder.Entity("MyApi.Models.Entities.RefreshToken", b =>
@@ -351,6 +378,11 @@ namespace MyApi.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("Id");
 
+                    b.Property<string>("LogoKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("LogoKey");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -411,6 +443,11 @@ namespace MyApi.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("Id");
+
+                    b.Property<string>("AvatarKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("AvatarKey");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -583,6 +620,15 @@ namespace MyApi.Migrations
                     b.Navigation("Seller");
                 });
 
+            modelBuilder.Entity("MyApi.Models.Entities.ProductImage", b =>
+                {
+                    b.HasOne("MyApi.Models.Entities.Product", null)
+                        .WithMany("Images")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyApi.Models.Entities.RefreshToken", b =>
                 {
                     b.HasOne("MyApi.Models.Entities.UserAccount", "User")
@@ -644,6 +690,8 @@ namespace MyApi.Migrations
 
             modelBuilder.Entity("MyApi.Models.Entities.Product", b =>
                 {
+                    b.Navigation("Images");
+
                     b.Navigation("Reviews");
                 });
 
