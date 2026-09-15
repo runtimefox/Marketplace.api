@@ -14,7 +14,8 @@ public record SellerMembershipDto
         {
             Id = x.Seller.Id,
             Name = x.Seller.Name,
-            Rating = x.Seller.Rating
+            Rating = x.Seller.Rating,
+            LogoKey = x.Seller.LogoKey
         },
         Role = x.Role
     };

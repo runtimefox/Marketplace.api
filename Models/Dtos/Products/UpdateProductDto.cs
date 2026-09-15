@@ -18,9 +18,4 @@ public record UpdateProductDto
     public required Guid CategoryId { get; init; }
 
     [MaxLength(Product.DescriptionMaxLength)]
-    public string? Description { get; init; }
-
-    [MaxLength(Product.ImageUrlMaxLength)]
-    [Url]
-    public string? ImageUrl { get; init; }
-}
+    public string? Description { get; init; }}

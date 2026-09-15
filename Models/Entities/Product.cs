@@ -9,7 +9,7 @@ public class Product
     public const int NameMaxLength = 200;
     public const int SkuMaxLength = 64;
     public const int DescriptionMaxLength = 4000;
-    public const int ImageUrlMaxLength = 2048;
+    public const int MaxImages = 10;
 
     [Key]
     [Column("Id")]
@@ -48,10 +48,6 @@ public class Product
     [Column("Description")]
     public string? Description { get; private set; }
 
-    [MaxLength(ImageUrlMaxLength)]
-    [Column("ImageUrl")]
-    public string? ImageUrl { get; private set; }
-
     [Column("CreatedAt")]
     public DateTimeOffset CreatedAt { get; private set; }
 
@@ -63,6 +59,10 @@ public class Product
     private readonly List<Review> _reviews = [];
 
     public IReadOnlyCollection<Review> Reviews => _reviews;
+
+    private readonly List<ProductImage> _images = [];
+
+    public IReadOnlyCollection<ProductImage> Images => _images;
 
     private Product()
     {
@@ -185,32 +185,57 @@ public class Product
         Touch();
     }
 
-    public void ChangeImageUrl(string? imageUrl)
+    public void EnsureCanAddImage()
     {
-        if (string.IsNullOrWhiteSpace(imageUrl))
+        if (_images.Count >= MaxImages)
         {
-            ImageUrl = null;
-            Touch();
-            return;
+            throw new InvalidOperationException($"A product can have at most {MaxImages} images.");
+        }
+    }
+
+    public ProductImage AddImage(string storageKey)
+    {
+        EnsureCanAddImage();
+
+        var position = _images.Count == 0 ? 0 : _images.Max(x => x.Position) + 1;
+        var image = new ProductImage(Id, storageKey, position);
+        _images.Add(image);
+
+        return image;
+    }
+
+    public ProductImage RemoveImage(Guid imageId)
+    {
+        var image = _images.FirstOrDefault(x => x.Id == imageId)
+                    ?? throw new InvalidOperationException($"Image {imageId} does not belong to product {Id}.");
+
+        _images.Remove(image);
+
+        var position = 0;
+        foreach (var remaining in _images.OrderBy(x => x.Position).ThenBy(x => x.CreatedAt))
+        {
+            remaining.MoveTo(position++);
         }
 
-        imageUrl = imageUrl.Trim();
+        return image;
+    }
 
-        if (imageUrl.Length > ImageUrlMaxLength)
+    public void ReorderImages(IReadOnlyList<Guid> imageIds)
+    {
+        var isSameSet = imageIds.Count == _images.Count
+                        && imageIds.Distinct().Count() == imageIds.Count
+                        && imageIds.All(id => _images.Any(x => x.Id == id));
+
+        if (!isSameSet)
         {
             throw new ArgumentException(
-                $"Length must not exceed {ImageUrlMaxLength} characters.", nameof(imageUrl));
+                "The new order must list every image of the product exactly once.", nameof(imageIds));
         }
 
-        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        for (var position = 0; position < imageIds.Count; position++)
         {
-            throw new ArgumentException(
-                "Image URL must be an http(s) address.", nameof(imageUrl));
+            _images.Single(x => x.Id == imageIds[position]).MoveTo(position);
         }
-
-        ImageUrl = imageUrl;
-        Touch();
     }
 
     public void Deactivate()

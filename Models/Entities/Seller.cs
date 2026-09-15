@@ -22,6 +22,10 @@ public class Seller
     [Column("Rating")]
     public decimal Rating { get; private set; }
 
+    [MaxLength(ImageStorageKey.MaxLength)]
+    [Column("LogoKey")]
+    public string? LogoKey { get; private set; }
+
     private readonly List<Product> _products = [];
 
     public IReadOnlyCollection<Product> Products => _products;
@@ -69,6 +73,16 @@ public class Seller
         }
 
         Rating = decimal.Round(rating, 2);
+    }
+
+    public void ChangeLogo(string storageKey)
+    {
+        LogoKey = ImageStorageKey.Validate(storageKey, nameof(storageKey));
+    }
+
+    public void RemoveLogo()
+    {
+        LogoKey = null;
     }
 
     public SellerMember AddManager(Guid userAccountId)

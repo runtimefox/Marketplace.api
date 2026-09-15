@@ -23,9 +23,4 @@ public record CreateProductDto
     public required Guid SellerId { get; init; }
 
     [MaxLength(Product.DescriptionMaxLength)]
-    public string? Description { get; init; }
-
-    [MaxLength(Product.ImageUrlMaxLength)]
-    [Url]
-    public string? ImageUrl { get; init; }
-}
+    public string? Description { get; init; }}

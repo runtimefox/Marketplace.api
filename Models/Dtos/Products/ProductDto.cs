@@ -17,8 +17,8 @@ public record ProductDto
     public required int ReviewCount { get; init; }
     public required CategoryDto Category { get; init; }
     public required SellerDto Seller { get; init; }
+    public required IReadOnlyList<ProductImageDto> Images { get; init; }
     public string? Description { get; init; }
-    public string? ImageUrl { get; init; }
 
     public static Expression<Func<Product, ProductDto>> Projection => x => new ProductDto
     {
@@ -39,10 +39,20 @@ public record ProductDto
         {
             Id = x.Seller.Id,
             Name = x.Seller.Name,
-            Rating = x.Seller.Rating
+            Rating = x.Seller.Rating,
+            LogoKey = x.Seller.LogoKey
         },
-        Description = x.Description,
-        ImageUrl = x.ImageUrl
+        Images = x.Images
+            .OrderBy(i => i.Position)
+            .ThenBy(i => i.CreatedAt)
+            .Select(i => new ProductImageDto
+            {
+                Id = i.Id,
+                Position = i.Position,
+                StorageKey = i.StorageKey
+            })
+            .ToList(),
+        Description = x.Description
     };
 
     public static ProductDto FromEntity(Product product) => new()
@@ -59,7 +69,11 @@ public record ProductDto
         ReviewCount = product.Reviews.Count,
         Category = CategoryDto.FromEntity(product.Category),
         Seller = SellerDto.FromEntity(product.Seller),
-        Description = product.Description,
-        ImageUrl = product.ImageUrl
+        Images = product.Images
+            .OrderBy(i => i.Position)
+            .ThenBy(i => i.CreatedAt)
+            .Select(ProductImageDto.FromEntity)
+            .ToList(),
+        Description = product.Description
     };
 }

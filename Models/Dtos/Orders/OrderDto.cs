@@ -27,13 +27,15 @@ public record OrderDto
         Buyer = new UserSummaryDto
         {
             Id = x.Buyer.Id,
-            Username = x.Buyer.Username
+            Username = x.Buyer.Username,
+            AvatarKey = x.Buyer.AvatarKey
         },
         Seller = new SellerDto
         {
             Id = x.Seller.Id,
             Name = x.Seller.Name,
-            Rating = x.Seller.Rating
+            Rating = x.Seller.Rating,
+            LogoKey = x.Seller.LogoKey
         },
         Items = x.Items
             .Select(i => new OrderItemDto

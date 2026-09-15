@@ -5,6 +5,7 @@ schema {
 
 type Query {
   users: [UserDto!]! @cost(weight: "10")
+  me: UserDto @cost(weight: "10")
   categories(
     where: CategoryDtoFilterInput @cost(weight: "10")
     order: [CategoryDtoSortInput!] @cost(weight: "10")
@@ -226,6 +227,11 @@ type DeliveryAddressDto {
   comment: String
 }
 
+type ImageDto {
+  smallUrl: String!
+  largeUrl: String!
+}
+
 "A connection to a list of items."
 type MyOrdersConnection {
   "Information to aid in pagination."
@@ -312,8 +318,16 @@ type ProductDto {
   reviewCount: Int!
   category: CategoryDto!
   seller: SellerDto!
+  images: [ProductImageDto!]!
   description: String
-  imageUrl: String
+  mainImage: ImageDto
+}
+
+type ProductImageDto {
+  id: UUID!
+  position: Int!
+  smallUrl: String!
+  largeUrl: String!
 }
 
 "A connection to a list of items."
@@ -375,6 +389,7 @@ type SellerDto {
   id: UUID!
   name: String!
   rating: Decimal!
+  logo: ImageDto
 }
 
 type SellerMemberDto {
@@ -455,11 +470,13 @@ type UserDto {
   username: String!
   email: String!
   role: UserRole!
+  avatar: ImageDto
 }
 
 type UserSummaryDto {
   id: UUID!
   username: String!
+  avatar: ImageDto
 }
 
 input AddSellerManagerDtoInput {
@@ -504,7 +521,6 @@ input CreateProductDtoInput {
   categoryId: UUID!
   sellerId: UUID!
   description: String
-  imageUrl: String
 }
 
 input CreateReviewDtoInput {
@@ -604,6 +620,13 @@ input ListFilterInputTypeOfOrderItemDtoFilterInput {
   any: Boolean @cost(weight: "10")
 }
 
+input ListFilterInputTypeOfProductImageDtoFilterInput {
+  all: ProductImageDtoFilterInput @cost(weight: "10")
+  none: ProductImageDtoFilterInput @cost(weight: "10")
+  some: ProductImageDtoFilterInput @cost(weight: "10")
+  any: Boolean @cost(weight: "10")
+}
+
 input OrderDtoFilterInput {
   and: [OrderDtoFilterInput!]
   or: [OrderDtoFilterInput!]
@@ -664,8 +687,8 @@ input ProductDtoFilterInput {
   reviewCount: IntOperationFilterInput
   category: CategoryDtoFilterInput
   seller: SellerDtoFilterInput
+  images: ListFilterInputTypeOfProductImageDtoFilterInput
   description: StringOperationFilterInput
-  imageUrl: StringOperationFilterInput
 }
 
 input ProductDtoSortInput {
@@ -680,7 +703,13 @@ input ProductDtoSortInput {
   category: CategoryDtoSortInput @cost(weight: "10")
   seller: SellerDtoSortInput @cost(weight: "10")
   description: SortEnumType @cost(weight: "10")
-  imageUrl: SortEnumType @cost(weight: "10")
+}
+
+input ProductImageDtoFilterInput {
+  and: [ProductImageDtoFilterInput!]
+  or: [ProductImageDtoFilterInput!]
+  id: UuidOperationFilterInput
+  position: IntOperationFilterInput
 }
 
 input ProductSummaryDtoFilterInput {
@@ -761,7 +790,6 @@ input UpdateProductDtoInput {
   stock: Int!
   categoryId: UUID!
   description: String
-  imageUrl: String
 }
 
 input UpdateReviewDtoInput {

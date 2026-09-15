@@ -38,7 +38,6 @@ public class ProductService(
 
         var product = new Product(dto.Name, dto.Sku, dto.Price, dto.Stock, dto.CategoryId, dto.SellerId);
         product.ChangeDescription(dto.Description);
-        product.ChangeImageUrl(dto.ImageUrl);
 
         dbContext.Products.Add(product);
         await SaveAsync(ct);
@@ -65,7 +64,6 @@ public class ProductService(
         product.SetStock(dto.Stock);
         product.ChangeCategory(dto.CategoryId);
         product.ChangeDescription(dto.Description);
-        product.ChangeImageUrl(dto.ImageUrl);
 
         await SaveAsync(ct);
 
