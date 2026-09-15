@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
@@ -7,6 +8,7 @@ using Amazon.Runtime;
 using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -93,6 +95,30 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services
+    .AddOptions<TrustedProxyOptions>()
+    .Bind(builder.Configuration.GetSection(TrustedProxyOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<ForwardedHeadersOptions>()
+    .Configure<IOptions<TrustedProxyOptions>>((forwarded, trusted) =>
+    {
+        forwarded.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        forwarded.ForwardLimit = trusted.Value.ForwardLimit;
+
+        foreach (var proxy in trusted.Value.Proxies)
+        {
+            forwarded.KnownProxies.Add(IPAddress.Parse(proxy));
+        }
+
+        foreach (var network in trusted.Value.Networks)
+        {
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+        }
+    });
 
 builder.Services
     .AddOptions<FrontendOptions>()
@@ -231,6 +257,8 @@ builder.Services
     .AddErrorFilter<DomainErrorFilter>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 if(builder.Environment.IsDevelopment()){
     await Seed.RunAsync(app.Services);
