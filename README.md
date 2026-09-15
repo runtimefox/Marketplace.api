@@ -101,7 +101,7 @@ docker run --rm myapi-migrations --connection "Host=...;Port=5432;Database=...;U
 
 ### Demo data
 
-In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`.
+In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`. Demo products have USD prices and generated photos, shops get logos and demo users get avatars; images require MinIO to be running (otherwise the API starts and logs a warning, and the images are created on the next start).
 
 | Email | Role |
 |---|---|
@@ -137,6 +137,7 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 ### Frontend
 
 - Browser origins allowed by CORS are set in `Frontend:AllowedOrigins` (Development: `http://localhost:3000`, `http://localhost:5173`). Send requests with credentials, e.g. `fetch(url, { credentials: "include" })`, so the auth cookies are included.
+- Behind a reverse proxy (Next.js rewrites, nginx, a load balancer) the API reads the client IP and scheme from `X-Forwarded-For` / `X-Forwarded-Proto`, but only from trusted proxies: localhost is trusted by default, others are listed in `TrustedProxies:Proxies` (IP addresses) or `TrustedProxies:Networks` (CIDR, e.g. `172.18.0.0/16` for a Docker network). Without it, rate limiting would treat all users as one client.
 - The GraphQL schema is committed as [`schema.graphql`](schema.graphql) for code generation (for example GraphQL Code Generator). A test fails when the file is outdated; regenerate it with `UPDATE_SCHEMA=1 dotnet test tests/MyApi.Tests --filter SchemaSnapshotTests`.
 
 ### Images
