@@ -12,8 +12,8 @@ public class ProductQueries
     [UsePaging(IncludeTotalCount = true)]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<ProductDto> GetProducts(IProductService products) =>
-        products.Query();
+    public IQueryable<ProductDto> GetProducts(string? search, IProductService products) =>
+        products.Query(search: search);
 
     public Task<ProductDto?> GetProductById(
         Guid id,
@@ -27,8 +27,9 @@ public class ProductQueries
     [UseSorting]
     public Task<IQueryable<ProductDto>> GetSellerProducts(
         Guid sellerId,
+        string? search,
         ClaimsPrincipal claimsPrincipal,
         IProductService products,
         CancellationToken ct) =>
-        products.QuerySellerProductsAsync(claimsPrincipal.GetRequiredUserId(), sellerId, ct);
+        products.QuerySellerProductsAsync(claimsPrincipal.GetRequiredUserId(), sellerId, search, ct);
 }

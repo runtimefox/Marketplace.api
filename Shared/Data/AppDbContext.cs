@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyApi.Models.Entities;
+using NpgsqlTypes;
 
 namespace MyApi.Shared.Data;
 
@@ -53,6 +54,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Product>()
             .HasIndex(x => new { x.CategoryId, x.IsActive });
+
+        modelBuilder.Entity<Product>()
+            .Property<NpgsqlTsVector>(ProductSearch.VectorColumn)
+            .HasComputedColumnSql(ProductSearch.VectorSql, stored: true);
+
+        modelBuilder.Entity<Product>()
+            .HasIndex(ProductSearch.VectorColumn)
+            .HasMethod("GIN");
 
         modelBuilder.Entity<Product>()
             .Property(x => x.Price)

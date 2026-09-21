@@ -91,6 +91,15 @@ Content-Type: application/json
   "query": "{ products(first: 5, order: { price: DESC }) { totalCount nodes { id name price stock category { name } seller { id name rating } } } }"
 }
 
+### GraphQL: search products
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($search: String) { products(search: $search, first: 10) { totalCount nodes { id name price description } } }",
+  "variables": { "search": "wireless earbuds" }
+}
+
 ### GraphQL: categories
 POST {{MyApi_HostAddress}}/graphql
 Content-Type: application/json
