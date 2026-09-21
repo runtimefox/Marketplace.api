@@ -9,7 +9,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 
 - **Accounts** — registration, JWT in HttpOnly cookies, refresh token rotation with reuse detection, profile and password change, `Customer` / `Admin` roles
 - **Shops** — sign up as a seller, shop owner and managers, seller cabinet with all shop products and orders
-- **Catalog** — products and categories with paging, filtering and sorting
+- **Catalog** — products and categories with paging, filtering and sorting; full-text product search by name and description
 - **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
 - **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
 - **Images** — product galleries (up to 10 photos), shop logos and user avatars; uploads are validated, converted to WebP in two sizes and stored in S3-compatible storage
@@ -169,6 +169,17 @@ Registration, sign-in and password change are limited to 10 requests per minute 
       category { name }
       seller { name rating }
     }
+  }
+}
+```
+
+Product search is available on `products` and `sellerProducts` through the `search` argument. It uses PostgreSQL full-text search over the name and description: every word matches by prefix and word forms (`wirel head` finds "Wireless Headphones"), an exact SKU also matches, and results are ordered by relevance unless `order` is given. Search can be combined with `where` and paging.
+
+```graphql
+{
+  products(search: "wireless headphones", first: 10, where: { price: { lte: 100 } }) {
+    totalCount
+    nodes { name price }
   }
 }
 ```
