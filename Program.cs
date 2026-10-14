@@ -254,6 +254,7 @@ builder.Services
     .AddTypeExtension<UserSummaryAvatarField>()
     .AddFiltering()
     .AddSorting()
+    .ModifyCostOptions(options => options.Filtering.VariableMultiplier = 1)
     .AddErrorFilter<DomainErrorFilter>();
 
 var app = builder.Build();
