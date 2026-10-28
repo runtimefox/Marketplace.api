@@ -1,17 +1,27 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MyApi.Models.Dtos.Orders;
 using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Orders;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Services.Interfaces.Sellers;
+using MyApi.Shared.Configuration;
 using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAccess) : IOrderService
+public class OrderService(
+    AppDbContext dbContext,
+    ISellerAccessService sellerAccess,
+    IPaymentGateway paymentGateway,
+    IOptions<PaymentOptions> paymentOptions) : IOrderService
 {
     private const string StockChanged =
         "Stock of some products has changed. Please review your cart and try again.";
+
+    private const string OrderChanged =
+        "The order was changed by another request. Please try again.";
 
     public IQueryable<OrderDto> QueryBuyerOrders(Guid userId) =>
         QueryOrders(x => x.BuyerId == userId);
@@ -41,7 +51,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         return await GetOrderDtoAsync(id, ct);
     }
 
-    public async Task<IReadOnlyList<OrderDto>> CheckoutAsync(Guid userId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<OrderDto>> CheckoutAsync(Guid userId, CheckoutDto dto, CancellationToken ct = default)
     {
         var cartItems = await dbContext.CartItems
             .Include(x => x.Product)
@@ -56,17 +66,42 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
 
         var orders = cartItems
             .GroupBy(x => x.Product.SellerId)
-            .Select(group => Order.Create(userId, group.Key, group.Select(x => (x.Product, x.Quantity))))
+            .Select(group => Order.Create(
+                userId,
+                group.Key,
+                ToDeliveryAddress(dto.DeliveryAddress),
+                group.Select(x => (x.Product, x.Quantity)),
+                paymentOptions.Value.PaymentWindow))
             .ToList();
 
         dbContext.Orders.AddRange(orders);
         dbContext.CartItems.RemoveRange(cartItems);
 
-        await SaveAsync(ct);
+        await SaveAsync(ct, StockChanged);
 
         var orderIds = orders.Select(x => x.Id).ToList();
 
         return await QueryOrders(x => orderIds.Contains(x.Id)).ToListAsync(ct);
+    }
+
+    public async Task<OrderDto?> UpdateDeliveryAddressAsync(
+        Guid userId, Guid id, DeliveryAddressDto dto, CancellationToken ct = default)
+    {
+        var order = await dbContext.Orders.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (order is null)
+        {
+            return null;
+        }
+
+        if (order.BuyerId != userId)
+        {
+            throw new UnauthorizedAccessException("Only the buyer can change the delivery address of an order.");
+        }
+
+        order.ChangeDeliveryAddress(ToDeliveryAddress(dto));
+        await SaveAsync(ct);
+
+        return await GetOrderDtoAsync(id, ct);
     }
 
     public async Task<OrderDto?> ShipOrderAsync(Guid userId, Guid id, CancellationToken ct = default)
@@ -107,6 +142,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
     public async Task<OrderDto?> CancelOrderAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
         var order = await dbContext.Orders
+            .Include(x => x.Payment)
             .Include(x => x.Items)
             .ThenInclude(x => x.Product)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -117,6 +153,11 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         }
 
         await EnsureBuyerOrMemberAsync(userId, order.BuyerId, order.SellerId, ct);
+
+        if (order.Status == OrderStatus.Created && order.Payment is not null)
+        {
+            await paymentGateway.CancelPendingPaymentAsync(order.Payment, ct);
+        }
 
         order.Cancel();
         await SaveAsync(ct);
@@ -134,6 +175,9 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         throw new UnauthorizedAccessException("You do not have access to this order.");
     }
 
+    private static DeliveryAddress ToDeliveryAddress(DeliveryAddressDto dto) =>
+        new(dto.RecipientName, dto.Phone, dto.Country, dto.City, dto.AddressLine, dto.Apartment, dto.PostalCode, dto.Comment);
+
     private Task<OrderDto> GetOrderDtoAsync(Guid id, CancellationToken ct) =>
         QueryOrders(x => x.Id == id).FirstAsync(ct);
 
@@ -143,7 +187,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
             .OrderByDescending(x => x.CreatedAt)
             .Select(OrderDto.Projection);
 
-    private async Task SaveAsync(CancellationToken ct)
+    private async Task SaveAsync(CancellationToken ct, string conflictMessage = OrderChanged)
     {
         try
         {
@@ -151,7 +195,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new InvalidOperationException(StockChanged);
+            throw new InvalidOperationException(conflictMessage);
         }
     }
 }

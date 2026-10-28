@@ -9,9 +9,11 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 
 - **Accounts** — registration, JWT in HttpOnly cookies, refresh token rotation with reuse detection, profile and password change, `Customer` / `Admin` roles
 - **Shops** — sign up as a seller, shop owner and managers, seller cabinet with all shop products and orders
-- **Catalog** — products and categories with paging, filtering and sorting
-- **Cart and orders** — checkout creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
+- **Catalog** — products and categories with paging, filtering and sorting; full-text product search by name and description
+- **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → PAID → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
+- **Payments** — Stripe PaymentIntents: one payment covers all orders of a checkout, orders become paid only after a signed Stripe webhook
 - **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
+- **Images** — product galleries (up to 10 photos), shop logos and user avatars; uploads are validated, converted to WebP in two sizes and stored in S3-compatible storage
 
 ## Tech stack
 
@@ -21,6 +23,8 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 | API | GraphQL (HotChocolate 16), REST controllers for authentication |
 | Data | PostgreSQL 17, Entity Framework Core 10 (Npgsql) |
 | Auth | JWT bearer tokens stored in HttpOnly cookies |
+| Files | MinIO (S3-compatible) via AWSSDK.S3, SkiaSharp for image processing |
+| Payments | Stripe (Stripe.net, PaymentIntents + webhooks) |
 | Tests | xUnit, `WebApplicationFactory`, Testcontainers |
 | CI | GitHub Actions |
 
@@ -32,7 +36,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - [Docker](https://www.docker.com/)
 - EF Core CLI: `dotnet tool install --global dotnet-ef --version 10.0.12`
 
-### 1. Start PostgreSQL
+### 1. Start PostgreSQL and MinIO
 
 Create a `.env` file in the repository root:
 
@@ -47,6 +51,8 @@ POSTGRES_PORT=5432
 docker compose up -d
 ```
 
+This starts PostgreSQL and MinIO; the one-off `minio-init` container creates the public `myapi-images` bucket. The MinIO console is at http://localhost:9001 (`minioadmin` / `minioadmin` unless `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` are set in `.env`). `appsettings.Development.json` already points the API at this MinIO.
+
 ### 2. Configure secrets
 
 Secrets are kept in [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets), not in `appsettings.json`:
@@ -54,9 +60,15 @@ Secrets are kept in [user secrets](https://learn.microsoft.com/aspnet/core/secur
 ```bash
 dotnet user-secrets set "ConnectionStrings:DbConnection" "Host=localhost;Port=5432;Database=myapi;Username=postgres;Password=change-me"
 dotnet user-secrets set "Jwt:Key" "<random string, at least 32 characters>"
+dotnet user-secrets set "Stripe:SecretKey" "sk_test_..."
+dotnet user-secrets set "Stripe:WebhookSecret" "whsec_..."
 ```
 
-The app does not start without `Jwt:Key`.
+The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:WebhookSecret`. Use test-mode keys from the Stripe Dashboard. For local webhooks run the [Stripe CLI](https://docs.stripe.com/stripe-cli) and put the `whsec_...` secret it prints into `Stripe:WebhookSecret`:
+
+```bash
+stripe listen --forward-to http://localhost:5086/api/payments/stripe/webhook
+```
 
 ### 3. Apply migrations and run
 
@@ -70,9 +82,36 @@ dotnet run --launch-profile http
 | http://localhost:5086/graphql | GraphQL endpoint and Nitro IDE (schema, autocomplete) |
 | http://localhost:5086/swagger | REST endpoints (Development only) |
 
+### Run with Docker
+
+The `Dockerfile` builds two images: `api` (the application) and `migrations` (an EF Core migrations bundle). In `docker-compose.yml` both are behind the `app` profile, so `docker compose up -d` still starts only PostgreSQL.
+
+Add to `.env`:
+
+```env
+JWT_KEY=<random string, at least 32 characters>
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+API_PORT=8080
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+```bash
+docker compose --profile app up --build
+```
+
+Compose waits for PostgreSQL and MinIO, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data and no Swagger.
+
+To apply migrations to another database with the image:
+
+```bash
+docker build --target migrations --tag myapi-migrations .
+docker run --rm myapi-migrations --connection "Host=...;Port=5432;Database=...;Username=...;Password=..."
+```
+
 ### Demo data
 
-In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`.
+In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`. Demo products have EUR prices and generated photos, shops get logos and demo users get avatars; images require MinIO to be running (otherwise the API starts and logs a warning, and the images are created on the next start).
 
 | Email | Role |
 |---|---|
@@ -95,6 +134,11 @@ In the Development environment the database is seeded on startup. All demo accou
 | GET / PUT | `/api/auth/me` | Current user profile |
 | PUT | `/api/auth/me/password` | Change password, signs out other sessions |
 | GET | `/api/user`, `/api/user/{id}` | Users (admin only) |
+| PUT / DELETE | `/api/auth/me/avatar` | Upload or remove the current user's avatar |
+| POST | `/api/products/{productId}/images` | Upload a product photo (shop members) |
+| PUT | `/api/products/{productId}/images/order` | Reorder photos: `{ "imageIds": [...] }`, the first one is the main image |
+| DELETE | `/api/products/{productId}/images/{imageId}` | Remove a product photo |
+| PUT / DELETE | `/api/sellers/{sellerId}/logo` | Upload or remove a shop logo (shop owner) |
 
 Tokens are returned only in cookies. Sign in once through Swagger or `MyApi.http`, and the cookies are sent with the following REST and GraphQL requests.
 
@@ -103,7 +147,26 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 ### Frontend
 
 - Browser origins allowed by CORS are set in `Frontend:AllowedOrigins` (Development: `http://localhost:3000`, `http://localhost:5173`). Send requests with credentials, e.g. `fetch(url, { credentials: "include" })`, so the auth cookies are included.
+- Behind a reverse proxy (Next.js rewrites, nginx, a load balancer) the API reads the client IP and scheme from `X-Forwarded-For` / `X-Forwarded-Proto`, but only from trusted proxies: localhost is trusted by default, others are listed in `TrustedProxies:Proxies` (IP addresses) or `TrustedProxies:Networks` (CIDR, e.g. `172.18.0.0/16` for a Docker network). Without it, rate limiting would treat all users as one client.
 - The GraphQL schema is committed as [`schema.graphql`](schema.graphql) for code generation (for example GraphQL Code Generator). A test fails when the file is outdated; regenerate it with `UPDATE_SCHEMA=1 dotnet test tests/MyApi.Tests --filter SchemaSnapshotTests`.
+
+### Images
+
+- Files are uploaded through REST as `multipart/form-data` with a single `file` field (JPEG, PNG or WebP, up to 10 MB).
+- Every upload is checked by its real content, rotated according to EXIF, stripped of metadata and stored as WebP in two sizes: products 320 / 1280 px, shop logos 128 / 512 px, avatars 96 / 512 px (the longer side, never upscaled).
+- GraphQL exposes URLs only: `images { id position smallUrl largeUrl }` and `mainImage` on products, `logo` on shops, `avatar` on users and review authors.
+- A product has up to 10 photos. Replaced and deleted images are removed from storage.
+
+### Payments
+
+1. `checkout` creates orders in status `CREATED`.
+2. `createPayment(input: { orderIds })` creates one Stripe PaymentIntent for the total of the given orders (usually all orders of the checkout) and returns `clientSecret` and `payment { id status amount currency }`. Calling it again for the same orders returns the same payment; a different set of orders cancels the previous pending payment and creates a new one.
+3. The frontend confirms the payment with Stripe.js (Payment Element) using `clientSecret` and the publishable key.
+4. Stripe calls `POST /api/payments/stripe/webhook`; on `payment_intent.succeeded` the payment becomes `SUCCEEDED` and its orders `PAID`. Poll `paymentById(id)` or `orderById(id)` to show the result.
+
+An order must be paid within `Payments:PaymentWindowMinutes` (30 minutes by default, see `paymentDueAt` on the order). A background job checks every `Payments:ExpirationCheckIntervalSeconds` (60) and cancels expired unpaid orders: it cancels their pending PaymentIntent and returns the stock. If Stripe has already charged the buyer, the order is kept and becomes `PAID` when the webhook arrives.
+
+Only paid orders can be shipped. Canceling an unpaid order cancels its pending PaymentIntent; paid orders cannot be canceled yet (refunds are not implemented). The currency is set in `Payments:Currency` (`eur`).
 
 ### GraphQL
 
@@ -111,9 +174,10 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 |---|---|---|
 | Catalog | `products`, `productById`, `categories`, `categoryById` | `createCategory`, `updateCategory`, `deleteCategory` (admin) |
 | Shops | `sellers`, `sellerById`, `mySellers`, `sellerMembers`, `sellerProducts` | `createSeller`, `updateSeller`, `deleteSeller`, `addSellerManager`, `removeSellerMember`, `createProduct`, `updateProduct`, `activateProduct`, `deleteProduct` |
-| Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
+| Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `updateOrderDeliveryAddress`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
+| Payments | `paymentById` | `createPayment` |
 | Reviews | `productReviews`, `myReviews`, `canReviewProduct` | `createReview`, `updateReview`, `deleteReview` |
-| Users | `users` (admin) | — |
+| Users | `me`, `users` (admin) | — |
 
 ```graphql
 {
@@ -131,6 +195,17 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 }
 ```
 
+Product search is available on `products` and `sellerProducts` through the `search` argument. It uses PostgreSQL full-text search over the name and description: every word matches by prefix and word forms (`wirel head` finds "Wireless Headphones"), an exact SKU also matches, and results are ordered by relevance unless `order` is given. Search can be combined with `where` and paging.
+
+```graphql
+{
+  products(search: "wireless headphones", first: 10, where: { price: { lte: 100 } }) {
+    totalCount
+    nodes { name price }
+  }
+}
+```
+
 Errors from business rules come back with `extensions.code`: `INVALID_INPUT`, `FORBIDDEN`, `AUTH_NOT_AUTHENTICATED` or `AUTH_NOT_AUTHORIZED`.
 
 Ready-to-use REST and GraphQL requests are in [`MyApi.http`](MyApi.http).
@@ -142,7 +217,7 @@ dotnet test tests/MyApi.Tests
 dotnet test tests/MyApi.Tests --filter "FullyQualifiedName~MyApi.Tests.Unit"
 ```
 
-- **Integration tests** start the whole application against a PostgreSQL container (Testcontainers) with real migrations and cover auth, access rules, cart, orders, stock concurrency and reviews. Docker must be running.
+- **Integration tests** start the whole application against a PostgreSQL container (Testcontainers) with real migrations and cover auth, access rules, cart, orders, payments (with a fake Stripe gateway and signed webhooks), stock concurrency and reviews. Docker must be running.
 - **Unit tests** cover entity invariants and do not need Docker.
 
 ## Project structure

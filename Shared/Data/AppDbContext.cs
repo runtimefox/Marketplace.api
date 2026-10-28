@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyApi.Models.Entities;
+using NpgsqlTypes;
 
 namespace MyApi.Shared.Data;
 
@@ -14,7 +15,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CartItem> CartItems { get; set; }
     public DbSet<Order> Orders { get; set; }
     public DbSet<OrderItem> OrderItems { get; set; }
+    public DbSet<Payment> Payments { get; set; }
     public DbSet<Review> Reviews { get; set; }
+    public DbSet<ProductImage> ProductImages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +55,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Product>()
             .HasIndex(x => new { x.CategoryId, x.IsActive });
+
+        modelBuilder.Entity<Product>()
+            .Property<NpgsqlTsVector>(ProductSearch.VectorColumn)
+            .HasComputedColumnSql(ProductSearch.VectorSql, stored: true);
+
+        modelBuilder.Entity<Product>()
+            .HasIndex(ProductSearch.VectorColumn)
+            .HasMethod("GIN");
 
         modelBuilder.Entity<Product>()
             .Property(x => x.Price)
@@ -135,6 +146,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasIndex(x => new { x.SellerId, x.Status });
 
         modelBuilder.Entity<Order>()
+            .HasIndex(x => new { x.Status, x.PaymentDueAt });
+
+        modelBuilder.Entity<Order>()
             .HasOne(x => x.Buyer)
             .WithMany()
             .HasForeignKey(x => x.BuyerId)
@@ -147,10 +161,49 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Order>()
+            .OwnsOne(x => x.DeliveryAddress);
+
+        modelBuilder.Entity<Order>()
+            .Navigation(x => x.DeliveryAddress)
+            .IsRequired();
+
+        modelBuilder.Entity<Order>()
             .HasMany(x => x.Items)
             .WithOne()
             .HasForeignKey(x => x.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Order>()
+            .Property(x => x.Version)
+            .IsRowVersion();
+
+        modelBuilder.Entity<Order>()
+            .HasOne(x => x.Payment)
+            .WithMany(x => x.Orders)
+            .HasForeignKey(x => x.PaymentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Payment>()
+            .Property(x => x.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Payment>()
+            .Property(x => x.Amount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Payment>()
+            .HasIndex(x => x.ProviderPaymentId)
+            .IsUnique();
+
+        modelBuilder.Entity<Payment>()
+            .HasIndex(x => new { x.BuyerId, x.CreatedAt });
+
+        modelBuilder.Entity<Payment>()
+            .HasOne(x => x.Buyer)
+            .WithMany()
+            .HasForeignKey(x => x.BuyerId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<OrderItem>()
             .Property(x => x.UnitPrice)
@@ -161,6 +214,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(x => x.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Product>()
+            .HasMany(x => x.Images)
+            .WithOne()
+            .HasForeignKey(x => x.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProductImage>()
+            .HasIndex(x => new { x.ProductId, x.Position });
 
         modelBuilder.Entity<Review>()
             .HasIndex(x => new { x.ProductId, x.UserAccountId })

@@ -12,18 +12,20 @@ public class ProductService(
     AppDbContext dbContext,
     ISellerAccessService sellerAccess) : IProductService
 {
-    public IQueryable<ProductDto> Query(bool includeInactive = false) =>
+    public IQueryable<ProductDto> Query(bool includeInactive = false, string? search = null) =>
         dbContext.Products
             .Where(x => includeInactive || x.IsActive)
+            .Search(search)
             .Select(ProductDto.Projection);
 
     public async Task<IQueryable<ProductDto>> QuerySellerProductsAsync(
-        Guid userId, Guid sellerId, CancellationToken ct = default)
+        Guid userId, Guid sellerId, string? search = null, CancellationToken ct = default)
     {
         await sellerAccess.EnsureMemberAsync(userId, sellerId, ct);
 
         return dbContext.Products
             .Where(x => x.SellerId == sellerId)
+            .Search(search)
             .Select(ProductDto.Projection);
     }
 
@@ -38,7 +40,6 @@ public class ProductService(
 
         var product = new Product(dto.Name, dto.Sku, dto.Price, dto.Stock, dto.CategoryId, dto.SellerId);
         product.ChangeDescription(dto.Description);
-        product.ChangeImageUrl(dto.ImageUrl);
 
         dbContext.Products.Add(product);
         await SaveAsync(ct);
@@ -65,7 +66,6 @@ public class ProductService(
         product.SetStock(dto.Stock);
         product.ChangeCategory(dto.CategoryId);
         product.ChangeDescription(dto.Description);
-        product.ChangeImageUrl(dto.ImageUrl);
 
         await SaveAsync(ct);
 

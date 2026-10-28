@@ -1,9 +1,15 @@
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Shared.Data;
+using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
 
 namespace MyApi.Tests.Infrastructure;
@@ -11,19 +17,39 @@ namespace MyApi.Tests.Infrastructure;
 public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string FrontendOrigin = "http://localhost:5173";
+    public const string StripeWebhookSecret = "whsec_integration_tests";
 
     private const string EnvironmentName = "Testing";
     private const string JwtKey = "integration-tests-jwt-signing-key-0123456789";
+    private const string StorageBucket = "test-images";
+    private const string StorageRegion = "us-east-1";
 
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17").Build();
 
+    private readonly MinioContainer _storage =
+        new MinioBuilder("cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7").Build();
+
+    public FakePaymentGateway PaymentGateway { get; } = new();
+
     public async Task InitializeAsync()
     {
-        await _database.StartAsync();
+        await Task.WhenAll(_database.StartAsync(), _storage.StartAsync());
+
+        var storageUrl = _storage.GetConnectionString().TrimEnd('/');
 
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", EnvironmentName);
         Environment.SetEnvironmentVariable("ConnectionStrings__DbConnection", _database.GetConnectionString());
         Environment.SetEnvironmentVariable("Jwt__Key", JwtKey);
+        Environment.SetEnvironmentVariable("Storage__ServiceUrl", storageUrl);
+        Environment.SetEnvironmentVariable("Storage__PublicBaseUrl", $"{storageUrl}/{StorageBucket}");
+        Environment.SetEnvironmentVariable("Storage__BucketName", StorageBucket);
+        Environment.SetEnvironmentVariable("Storage__AccessKey", _storage.GetAccessKey());
+        Environment.SetEnvironmentVariable("Storage__SecretKey", _storage.GetSecretKey());
+        Environment.SetEnvironmentVariable("Storage__Region", StorageRegion);
+        Environment.SetEnvironmentVariable("Stripe__SecretKey", "sk_test_integration_tests");
+        Environment.SetEnvironmentVariable("Stripe__WebhookSecret", StripeWebhookSecret);
+
+        await CreatePublicBucketAsync(storageUrl);
 
         await using var scope = Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
@@ -43,13 +69,39 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
             new Dictionary<string, string?>
             {
                 ["Frontend:AllowedOrigins:0"] = FrontendOrigin,
-                ["RateLimiting:Auth:PermitLimit"] = "100000"
+                ["RateLimiting:Auth:PermitLimit"] = "100000",
+                ["Payments:ExpirationCheckIntervalSeconds"] = "86400"
             }));
+        builder.ConfigureTestServices(services => services.AddSingleton<IPaymentGateway>(PaymentGateway));
     }
 
     async Task IAsyncLifetime.DisposeAsync()
     {
         await base.DisposeAsync();
         await _database.DisposeAsync();
+        await _storage.DisposeAsync();
+    }
+
+    private async Task CreatePublicBucketAsync(string storageUrl)
+    {
+        using var s3 = new AmazonS3Client(
+            new BasicAWSCredentials(_storage.GetAccessKey(), _storage.GetSecretKey()),
+            new AmazonS3Config
+            {
+                ServiceURL = storageUrl,
+                AuthenticationRegion = StorageRegion,
+                ForcePathStyle = true,
+                RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+                ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+            });
+
+        await s3.PutBucketAsync(new PutBucketRequest { BucketName = StorageBucket });
+        await s3.PutBucketPolicyAsync(new PutBucketPolicyRequest
+        {
+            BucketName = StorageBucket,
+            Policy = $$"""
+                {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::{{StorageBucket}}/*"]}]}
+                """
+        });
     }
 }

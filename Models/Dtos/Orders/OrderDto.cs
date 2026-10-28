@@ -13,7 +13,10 @@ public record OrderDto
     public required UserSummaryDto Buyer { get; init; }
     public required SellerDto Seller { get; init; }
     public required IReadOnlyList<OrderItemDto> Items { get; init; }
+    public required DeliveryAddressDto DeliveryAddress { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
+    public required DateTimeOffset PaymentDueAt { get; init; }
+    public DateTimeOffset? PaidAt { get; init; }
     public DateTimeOffset? ShippedAt { get; init; }
     public DateTimeOffset? DeliveredAt { get; init; }
     public DateTimeOffset? CanceledAt { get; init; }
@@ -26,13 +29,15 @@ public record OrderDto
         Buyer = new UserSummaryDto
         {
             Id = x.Buyer.Id,
-            Username = x.Buyer.Username
+            Username = x.Buyer.Username,
+            AvatarKey = x.Buyer.AvatarKey
         },
         Seller = new SellerDto
         {
             Id = x.Seller.Id,
             Name = x.Seller.Name,
-            Rating = x.Seller.Rating
+            Rating = x.Seller.Rating,
+            LogoKey = x.Seller.LogoKey
         },
         Items = x.Items
             .Select(i => new OrderItemDto
@@ -45,7 +50,20 @@ public record OrderDto
                 LineTotal = i.UnitPrice * i.Quantity
             })
             .ToList(),
+        DeliveryAddress = new DeliveryAddressDto
+        {
+            RecipientName = x.DeliveryAddress.RecipientName,
+            Phone = x.DeliveryAddress.Phone,
+            Country = x.DeliveryAddress.Country,
+            City = x.DeliveryAddress.City,
+            AddressLine = x.DeliveryAddress.AddressLine,
+            Apartment = x.DeliveryAddress.Apartment,
+            PostalCode = x.DeliveryAddress.PostalCode,
+            Comment = x.DeliveryAddress.Comment
+        },
         CreatedAt = x.CreatedAt,
+        PaymentDueAt = x.PaymentDueAt,
+        PaidAt = x.PaidAt,
         ShippedAt = x.ShippedAt,
         DeliveredAt = x.DeliveredAt,
         CanceledAt = x.CanceledAt

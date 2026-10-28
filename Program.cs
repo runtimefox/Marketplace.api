@@ -1,10 +1,14 @@
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Amazon.Runtime;
+using Amazon.S3;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -12,7 +16,9 @@ using Microsoft.OpenApi;
 using MyApi.GraphQL;
 using MyApi.GraphQL.Cart;
 using MyApi.GraphQL.Categories;
+using MyApi.GraphQL.Images;
 using MyApi.GraphQL.Orders;
+using MyApi.GraphQL.Payments;
 using MyApi.GraphQL.Products;
 using MyApi.GraphQL.Reviews;
 using MyApi.GraphQL.Sellers;
@@ -21,7 +27,9 @@ using MyApi.Services;
 using MyApi.Services.Interfaces.Auth;
 using MyApi.Services.Interfaces.Cart;
 using MyApi.Services.Interfaces.Categories;
+using MyApi.Services.Interfaces.Images;
 using MyApi.Services.Interfaces.Orders;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Services.Interfaces.Products;
 using MyApi.Services.Interfaces.Reviews;
 using MyApi.Services.Interfaces.Sellers;
@@ -29,11 +37,12 @@ using MyApi.Services.Interfaces.Users;
 using MyApi.Shared.Auth;
 using MyApi.Shared.Configuration;
 using MyApi.Shared.Data;
+using MyApi.Shared.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
-    .AddControllers()
+    .AddControllers(options => options.Filters.Add<DomainExceptionFilter>())
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
@@ -88,6 +97,30 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services
+    .AddOptions<TrustedProxyOptions>()
+    .Bind(builder.Configuration.GetSection(TrustedProxyOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<ForwardedHeadersOptions>()
+    .Configure<IOptions<TrustedProxyOptions>>((forwarded, trusted) =>
+    {
+        forwarded.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        forwarded.ForwardLimit = trusted.Value.ForwardLimit;
+
+        foreach (var proxy in trusted.Value.Proxies)
+        {
+            forwarded.KnownProxies.Add(IPAddress.Parse(proxy));
+        }
+
+        foreach (var network in trusted.Value.Networks)
+        {
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+        }
+    });
 
 builder.Services
     .AddOptions<FrontendOptions>()
@@ -147,10 +180,58 @@ builder.Services.AddScoped<ISellerAccessService, SellerAccessService>();
 builder.Services.AddScoped<ISellerMemberService, SellerMemberService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IOrderExpirationService, OrderExpirationService>();
+builder.Services.AddHostedService<OrderExpirationWorker>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<IProductImageService, ProductImageService>();
+builder.Services.AddScoped<IProfileImageService, ProfileImageService>();
+builder.Services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
+builder.Services.AddSingleton<IImageStorage, ImageStorage>();
+builder.Services.AddSingleton<IImageUrlBuilder, ImageUrlBuilder>();
+builder.Services.AddSingleton<IFileStorage, S3FileStorage>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddSingleton<IPaymentGateway, StripePaymentGateway>();
+builder.Services.AddSingleton<IPaymentWebhookParser, StripeWebhookParser>();
+
+builder.Services
+    .AddOptions<PaymentOptions>()
+    .Bind(builder.Configuration.GetSection(PaymentOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<StripeOptions>()
+    .Bind(builder.Configuration.GetSection(StripeOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<Stripe.IStripeClient>(services =>
+    new Stripe.StripeClient(services.GetRequiredService<IOptions<StripeOptions>>().Value.SecretKey));
+
+builder.Services
+    .AddOptions<StorageOptions>()
+    .Bind(builder.Configuration.GetSection(StorageOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IAmazonS3>(services =>
+{
+    var storage = services.GetRequiredService<IOptions<StorageOptions>>().Value;
+
+    return new AmazonS3Client(
+        new BasicAWSCredentials(storage.AccessKey, storage.SecretKey),
+        new AmazonS3Config
+        {
+            ServiceURL = storage.ServiceUrl,
+            AuthenticationRegion = storage.Region,
+            ForcePathStyle = true,
+            RequestChecksumCalculation = RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = ResponseChecksumValidation.WHEN_REQUIRED
+        });
+});
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -182,17 +263,27 @@ builder.Services
     .AddTypeExtension<CartMutations>()
     .AddTypeExtension<OrderQueries>()
     .AddTypeExtension<OrderMutations>()
+    .AddTypeExtension<PaymentQueries>()
+    .AddTypeExtension<PaymentMutations>()
     .AddTypeExtension<ReviewQueries>()
     .AddTypeExtension<ReviewMutations>()
     .AddTypeExtension<ProductQueries>()
     .AddTypeExtension<ProductMutations>()
     .AddTypeExtension<SellerQueries>()
     .AddTypeExtension<SellerMutations>()
+    .AddTypeExtension<ProductImageFields>()
+    .AddTypeExtension<ProductImageUrlFields>()
+    .AddTypeExtension<SellerLogoField>()
+    .AddTypeExtension<UserAvatarField>()
+    .AddTypeExtension<UserSummaryAvatarField>()
     .AddFiltering()
     .AddSorting()
+    .ModifyCostOptions(options => options.Filtering.VariableMultiplier = 1)
     .AddErrorFilter<DomainErrorFilter>();
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 if(builder.Environment.IsDevelopment()){
     await Seed.RunAsync(app.Services);

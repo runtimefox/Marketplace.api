@@ -35,6 +35,10 @@ public class UserAccount
     [Column("Role")]
     public UserRole Role { get; private set; }
 
+    [MaxLength(ImageStorageKey.MaxLength)]
+    [Column("AvatarKey")]
+    public string? AvatarKey { get; private set; }
+
     private UserAccount()
     {
     }
@@ -68,6 +72,16 @@ public class UserAccount
     public void SetPasswordHash(string passwordHash)
     {
         PasswordHash = Require(passwordHash, PasswordMaxLength, nameof(passwordHash));
+    }
+
+    public void ChangeAvatar(string storageKey)
+    {
+        AvatarKey = ImageStorageKey.Validate(storageKey, nameof(storageKey));
+    }
+
+    public void RemoveAvatar()
+    {
+        AvatarKey = null;
     }
 
     public void ChangeRole(UserRole role)

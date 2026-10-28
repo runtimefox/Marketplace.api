@@ -5,6 +5,7 @@ schema {
 
 type Query {
   users: [UserDto!]! @cost(weight: "10")
+  me: UserDto @cost(weight: "10")
   categories(
     where: CategoryDtoFilterInput @cost(weight: "10")
     order: [CategoryDtoSortInput!] @cost(weight: "10")
@@ -53,6 +54,7 @@ type Query {
     )
     @cost(weight: "10")
   orderById(id: UUID!): OrderDto @cost(weight: "10")
+  paymentById(id: UUID!): PaymentDto @cost(weight: "10")
   productReviews(
     productId: UUID!
     "Returns the first _n_ elements from the list."
@@ -96,6 +98,7 @@ type Query {
     @cost(weight: "10")
   canReviewProduct(productId: UUID!): Boolean! @cost(weight: "10")
   products(
+    search: String
     "Returns the first _n_ elements from the list."
     first: Int
     "Returns the elements in the list that come after the specified cursor."
@@ -118,6 +121,7 @@ type Query {
   productById(id: UUID!): ProductDto @cost(weight: "10")
   sellerProducts(
     sellerId: UUID!
+    search: String
     "Returns the first _n_ elements from the list."
     first: Int
     "Returns the elements in the list that come after the specified cursor."
@@ -172,10 +176,14 @@ type Mutation {
   updateCartItem(input: UpdateCartItemDtoInput!): CartDto! @cost(weight: "10")
   removeFromCart(productId: UUID!): CartDto! @cost(weight: "10")
   clearCart: CartDto! @cost(weight: "10")
-  checkout: [OrderDto!]! @cost(weight: "10")
+  checkout(input: CheckoutDtoInput!): [OrderDto!]! @cost(weight: "10")
+  updateOrderDeliveryAddress(id: UUID!, input: DeliveryAddressDtoInput!): OrderDto
+    @cost(weight: "10")
   shipOrder(id: UUID!): OrderDto @cost(weight: "10")
   confirmOrderDelivery(id: UUID!): OrderDto @cost(weight: "10")
   cancelOrder(id: UUID!): OrderDto @cost(weight: "10")
+  createPayment(input: CreatePaymentDtoInput!): PaymentSessionDto!
+    @cost(weight: "10")
   createReview(input: CreateReviewDtoInput!): ReviewDto! @cost(weight: "10")
   updateReview(id: UUID!, input: UpdateReviewDtoInput!): ReviewDto
     @cost(weight: "10")
@@ -211,6 +219,22 @@ type CartItemDto {
 type CategoryDto {
   id: UUID!
   name: String!
+}
+
+type DeliveryAddressDto {
+  recipientName: String!
+  phone: String!
+  country: String!
+  city: String!
+  addressLine: String!
+  apartment: String
+  postalCode: String!
+  comment: String
+}
+
+type ImageDto {
+  smallUrl: String!
+  largeUrl: String!
 }
 
 "A connection to a list of items."
@@ -260,7 +284,10 @@ type OrderDto {
   buyer: UserSummaryDto!
   seller: SellerDto!
   items: [OrderItemDto!]!
+  deliveryAddress: DeliveryAddressDto!
   createdAt: DateTime!
+  paymentDueAt: DateTime!
+  paidAt: DateTime
   shippedAt: DateTime
   deliveredAt: DateTime
   canceledAt: DateTime
@@ -287,6 +314,22 @@ type PageInfo {
   endCursor: String
 }
 
+type PaymentDto {
+  id: UUID!
+  status: PaymentStatus!
+  amount: Decimal!
+  currency: String!
+  orderIds: [UUID!]!
+  createdAt: DateTime!
+  succeededAt: DateTime
+  canceledAt: DateTime
+}
+
+type PaymentSessionDto {
+  payment: PaymentDto!
+  clientSecret: String!
+}
+
 type ProductDto {
   id: UUID!
   name: String!
@@ -298,8 +341,16 @@ type ProductDto {
   reviewCount: Int!
   category: CategoryDto!
   seller: SellerDto!
+  images: [ProductImageDto!]!
   description: String
-  imageUrl: String
+  mainImage: ImageDto
+}
+
+type ProductImageDto {
+  id: UUID!
+  position: Int!
+  smallUrl: String!
+  largeUrl: String!
 }
 
 "A connection to a list of items."
@@ -361,6 +412,7 @@ type SellerDto {
   id: UUID!
   name: String!
   rating: Decimal!
+  logo: ImageDto
 }
 
 type SellerMemberDto {
@@ -441,11 +493,13 @@ type UserDto {
   username: String!
   email: String!
   role: UserRole!
+  avatar: ImageDto
 }
 
 type UserSummaryDto {
   id: UUID!
   username: String!
+  avatar: ImageDto
 }
 
 input AddSellerManagerDtoInput {
@@ -474,8 +528,16 @@ input CategoryDtoSortInput {
   name: SortEnumType @cost(weight: "10")
 }
 
+input CheckoutDtoInput {
+  deliveryAddress: DeliveryAddressDtoInput!
+}
+
 input CreateCategoryDtoInput {
   name: String!
+}
+
+input CreatePaymentDtoInput {
+  orderIds: [UUID!]!
 }
 
 input CreateProductDtoInput {
@@ -486,7 +548,6 @@ input CreateProductDtoInput {
   categoryId: UUID!
   sellerId: UUID!
   description: String
-  imageUrl: String
 }
 
 input CreateReviewDtoInput {
@@ -529,6 +590,41 @@ input DecimalOperationFilterInput {
   nlte: Decimal @cost(weight: "10")
 }
 
+input DeliveryAddressDtoFilterInput {
+  and: [DeliveryAddressDtoFilterInput!]
+  or: [DeliveryAddressDtoFilterInput!]
+  recipientName: StringOperationFilterInput
+  phone: StringOperationFilterInput
+  country: StringOperationFilterInput
+  city: StringOperationFilterInput
+  addressLine: StringOperationFilterInput
+  apartment: StringOperationFilterInput
+  postalCode: StringOperationFilterInput
+  comment: StringOperationFilterInput
+}
+
+input DeliveryAddressDtoInput {
+  recipientName: String!
+  phone: String!
+  country: String!
+  city: String!
+  addressLine: String!
+  apartment: String
+  postalCode: String!
+  comment: String
+}
+
+input DeliveryAddressDtoSortInput {
+  recipientName: SortEnumType @cost(weight: "10")
+  phone: SortEnumType @cost(weight: "10")
+  country: SortEnumType @cost(weight: "10")
+  city: SortEnumType @cost(weight: "10")
+  addressLine: SortEnumType @cost(weight: "10")
+  apartment: SortEnumType @cost(weight: "10")
+  postalCode: SortEnumType @cost(weight: "10")
+  comment: SortEnumType @cost(weight: "10")
+}
+
 input IntOperationFilterInput {
   eq: Int @cost(weight: "10")
   neq: Int @cost(weight: "10")
@@ -551,6 +647,13 @@ input ListFilterInputTypeOfOrderItemDtoFilterInput {
   any: Boolean @cost(weight: "10")
 }
 
+input ListFilterInputTypeOfProductImageDtoFilterInput {
+  all: ProductImageDtoFilterInput @cost(weight: "10")
+  none: ProductImageDtoFilterInput @cost(weight: "10")
+  some: ProductImageDtoFilterInput @cost(weight: "10")
+  any: Boolean @cost(weight: "10")
+}
+
 input OrderDtoFilterInput {
   and: [OrderDtoFilterInput!]
   or: [OrderDtoFilterInput!]
@@ -560,7 +663,10 @@ input OrderDtoFilterInput {
   buyer: UserSummaryDtoFilterInput
   seller: SellerDtoFilterInput
   items: ListFilterInputTypeOfOrderItemDtoFilterInput
+  deliveryAddress: DeliveryAddressDtoFilterInput
   createdAt: DateTimeOperationFilterInput
+  paymentDueAt: DateTimeOperationFilterInput
+  paidAt: DateTimeOperationFilterInput
   shippedAt: DateTimeOperationFilterInput
   deliveredAt: DateTimeOperationFilterInput
   canceledAt: DateTimeOperationFilterInput
@@ -572,7 +678,10 @@ input OrderDtoSortInput {
   totalAmount: SortEnumType @cost(weight: "10")
   buyer: UserSummaryDtoSortInput @cost(weight: "10")
   seller: SellerDtoSortInput @cost(weight: "10")
+  deliveryAddress: DeliveryAddressDtoSortInput @cost(weight: "10")
   createdAt: SortEnumType @cost(weight: "10")
+  paymentDueAt: SortEnumType @cost(weight: "10")
+  paidAt: SortEnumType @cost(weight: "10")
   shippedAt: SortEnumType @cost(weight: "10")
   deliveredAt: SortEnumType @cost(weight: "10")
   canceledAt: SortEnumType @cost(weight: "10")
@@ -609,8 +718,8 @@ input ProductDtoFilterInput {
   reviewCount: IntOperationFilterInput
   category: CategoryDtoFilterInput
   seller: SellerDtoFilterInput
+  images: ListFilterInputTypeOfProductImageDtoFilterInput
   description: StringOperationFilterInput
-  imageUrl: StringOperationFilterInput
 }
 
 input ProductDtoSortInput {
@@ -625,7 +734,13 @@ input ProductDtoSortInput {
   category: CategoryDtoSortInput @cost(weight: "10")
   seller: SellerDtoSortInput @cost(weight: "10")
   description: SortEnumType @cost(weight: "10")
-  imageUrl: SortEnumType @cost(weight: "10")
+}
+
+input ProductImageDtoFilterInput {
+  and: [ProductImageDtoFilterInput!]
+  or: [ProductImageDtoFilterInput!]
+  id: UuidOperationFilterInput
+  position: IntOperationFilterInput
 }
 
 input ProductSummaryDtoFilterInput {
@@ -706,7 +821,6 @@ input UpdateProductDtoInput {
   stock: Int!
   categoryId: UUID!
   description: String
-  imageUrl: String
 }
 
 input UpdateReviewDtoInput {
@@ -757,8 +871,15 @@ enum ApplyPolicy {
 
 enum OrderStatus {
   CREATED
+  PAID
   SHIPPED
   DELIVERED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
   CANCELED
 }
 

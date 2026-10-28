@@ -3,6 +3,7 @@
 @sellerId = 00000000-0000-0000-0000-000000000000
 @orderId = 00000000-0000-0000-0000-000000000000
 @reviewId = 00000000-0000-0000-0000-000000000000
+@imageId = 00000000-0000-0000-0000-000000000000
 
 ### Register a buyer
 POST {{MyApi_HostAddress}}/api/auth/register
@@ -90,6 +91,15 @@ Content-Type: application/json
   "query": "{ products(first: 5, order: { price: DESC }) { totalCount nodes { id name price stock category { name } seller { id name rating } } } }"
 }
 
+### GraphQL: search products
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($search: String) { products(search: $search, first: 10) { totalCount nodes { id name price description } } }",
+  "variables": { "search": "wireless earbuds" }
+}
+
 ### GraphQL: categories
 POST {{MyApi_HostAddress}}/graphql
 Content-Type: application/json
@@ -137,7 +147,40 @@ POST {{MyApi_HostAddress}}/graphql
 Content-Type: application/json
 
 {
-  "query": "mutation { checkout { id status totalAmount seller { name } items { productName unitPrice quantity lineTotal } } }"
+  "query": "mutation ($input: CheckoutDtoInput!) { checkout(input: $input) { id status totalAmount seller { name } items { productName unitPrice quantity lineTotal } deliveryAddress { recipientName phone country city addressLine } } }",
+  "variables": {
+    "input": {
+      "deliveryAddress": {
+        "recipientName": "Demo Buyer",
+        "phone": "+49 30 1234567",
+        "country": "Germany",
+        "city": "Berlin",
+        "addressLine": "Unter den Linden 5",
+        "apartment": "3",
+        "postalCode": "10117",
+        "comment": "Leave at the front desk"
+      }
+    }
+  }
+}
+
+### GraphQL: change delivery address (buyer, before shipping)
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "mutation ($orderId: UUID!, $input: DeliveryAddressDtoInput!) { updateOrderDeliveryAddress(id: $orderId, input: $input) { id deliveryAddress { country city addressLine apartment } } }",
+  "variables": {
+    "orderId": "{{orderId}}",
+    "input": {
+      "recipientName": "Demo Buyer",
+      "phone": "+1 (415) 555-0142",
+      "country": "United States",
+      "city": "San Francisco",
+      "addressLine": "500 Market Street",
+      "postalCode": "94105"
+    }
+  }
 }
 
 ### GraphQL: my orders
@@ -235,4 +278,68 @@ Content-Type: application/json
 
 {
   "query": "{ myReviews(first: 10) { totalCount nodes { id rating comment product { name } } } }"
+}
+
+### GraphQL: current user with avatar
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "{ me { id username email role avatar { smallUrl largeUrl } } }"
+}
+
+### Upload avatar (put an image next to this file as photo.jpg)
+PUT {{MyApi_HostAddress}}/api/auth/me/avatar
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### Delete avatar
+DELETE {{MyApi_HostAddress}}/api/auth/me/avatar
+
+### Upload product photo (shop members)
+POST {{MyApi_HostAddress}}/api/products/{{productId}}/images
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### Reorder product photos (the first one becomes the main image)
+PUT {{MyApi_HostAddress}}/api/products/{{productId}}/images/order
+Content-Type: application/json
+
+{
+  "imageIds": ["{{imageId}}"]
+}
+
+### Delete product photo
+DELETE {{MyApi_HostAddress}}/api/products/{{productId}}/images/{{imageId}}
+
+### Upload shop logo (shop owner)
+PUT {{MyApi_HostAddress}}/api/sellers/{{sellerId}}/logo
+Content-Type: multipart/form-data; boundary=MyApiBoundary
+
+--MyApiBoundary
+Content-Disposition: form-data; name="file"; filename="photo.jpg"
+Content-Type: image/jpeg
+
+< ./photo.jpg
+--MyApiBoundary--
+
+### GraphQL: product photos
+POST {{MyApi_HostAddress}}/graphql
+Content-Type: application/json
+
+{
+  "query": "query ($productId: UUID!) { productById(id: $productId) { name mainImage { smallUrl largeUrl } images { id position smallUrl largeUrl } seller { name logo { smallUrl } } } }",
+  "variables": { "productId": "{{productId}}" }
 }

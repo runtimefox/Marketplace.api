@@ -23,7 +23,8 @@ public record ReviewDto
         Author = new UserSummaryDto
         {
             Id = x.UserAccount.Id,
-            Username = x.UserAccount.Username
+            Username = x.UserAccount.Username,
+            AvatarKey = x.UserAccount.AvatarKey
         },
         Product = new ProductSummaryDto
         {
