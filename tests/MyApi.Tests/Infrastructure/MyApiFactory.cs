@@ -24,7 +24,7 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
     private readonly PostgreSqlContainer _database = new PostgreSqlBuilder("postgres:17").Build();
 
     private readonly MinioContainer _storage =
-        new MinioBuilder("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z").Build();
+        new MinioBuilder("cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7").Build();
 
     public async Task InitializeAsync()
     {
