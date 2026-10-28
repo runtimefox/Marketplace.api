@@ -67,7 +67,7 @@ dotnet user-secrets set "Stripe:WebhookSecret" "whsec_..."
 The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:WebhookSecret`. Use test-mode keys from the Stripe Dashboard. For local webhooks run the [Stripe CLI](https://docs.stripe.com/stripe-cli) and put the `whsec_...` secret it prints into `Stripe:WebhookSecret`:
 
 ```bash
-stripe listen --forward-to http://localhost:5086/api/payments/stripe/webhook
+stripe listen --events payment_intent.succeeded,payment_intent.canceled --forward-to http://localhost:5086/api/payments/stripe/webhook
 ```
 
 ### 3. Apply migrations and run
