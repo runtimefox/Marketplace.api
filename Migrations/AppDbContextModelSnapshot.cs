@@ -108,6 +108,18 @@ namespace MyApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("DeliveredAt");
 
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("PaidAt");
+
+                    b.Property<DateTimeOffset>("PaymentDueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("PaymentDueAt");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("PaymentId");
+
                     b.Property<Guid>("SellerId")
                         .HasColumnType("uuid")
                         .HasColumnName("SellerId");
@@ -131,11 +143,21 @@ namespace MyApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("UpdatedAt");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("PaymentId");
 
                     b.HasIndex("BuyerId", "CreatedAt");
 
                     b.HasIndex("SellerId", "Status");
+
+                    b.HasIndex("Status", "PaymentDueAt");
 
                     b.ToTable("Orders");
                 });
@@ -183,6 +205,66 @@ namespace MyApi.Migrations
                     b.HasIndex("ProductId");
 
                     b.ToTable("OrderItems");
+                });
+
+            modelBuilder.Entity("MyApi.Models.Entities.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("Amount");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("BuyerId");
+
+                    b.Property<DateTimeOffset?>("CanceledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CanceledAt");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("Currency");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("ProviderPaymentId");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("Status");
+
+                    b.Property<DateTimeOffset?>("SucceededAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("SucceededAt");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("UpdatedAt");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderPaymentId")
+                        .IsUnique();
+
+                    b.HasIndex("BuyerId", "CreatedAt");
+
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("MyApi.Models.Entities.Product", b =>
@@ -521,6 +603,11 @@ namespace MyApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MyApi.Models.Entities.Payment", "Payment")
+                        .WithMany("Orders")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MyApi.Models.Entities.Seller", "Seller")
                         .WithMany()
                         .HasForeignKey("SellerId")
@@ -591,6 +678,8 @@ namespace MyApi.Migrations
                     b.Navigation("DeliveryAddress")
                         .IsRequired();
 
+                    b.Navigation("Payment");
+
                     b.Navigation("Seller");
                 });
 
@@ -609,6 +698,17 @@ namespace MyApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("MyApi.Models.Entities.Payment", b =>
+                {
+                    b.HasOne("MyApi.Models.Entities.UserAccount", "Buyer")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Buyer");
                 });
 
             modelBuilder.Entity("MyApi.Models.Entities.Product", b =>
@@ -696,6 +796,11 @@ namespace MyApi.Migrations
             modelBuilder.Entity("MyApi.Models.Entities.Order", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MyApi.Models.Entities.Payment", b =>
+                {
+                    b.Navigation("Orders");
                 });
 
             modelBuilder.Entity("MyApi.Models.Entities.Product", b =>

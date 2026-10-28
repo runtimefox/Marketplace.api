@@ -117,11 +117,14 @@ public class CartAndOrderTests(MyApiFactory factory)
 
         var sellerChanges = await seller.Client.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
         var buyerChanges = await buyer.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
+        await _scenario.PayAsync(buyer, [id]);
+        var afterPayment = await buyer.GraphQLAsync(UpdateAddress, new { id, input = Scenario.DeliveryAddressInput(city: "Munich") });
         (await seller.Client.GraphQLAsync(ShipOrder, new { id })).EnsureSuccess();
         var afterShipping = await buyer.GraphQLAsync(UpdateAddress, new { id, input = newAddress });
 
         sellerChanges.AssertError("FORBIDDEN");
         Assert.Equal("Berlin", buyerChanges["updateOrderDeliveryAddress"]["deliveryAddress"]!["city"].AsString());
+        Assert.Equal("Munich", afterPayment["updateOrderDeliveryAddress"]["deliveryAddress"]!["city"].AsString());
         afterShipping.AssertError("INVALID_INPUT");
     }
 
@@ -134,12 +137,15 @@ public class CartAndOrderTests(MyApiFactory factory)
         await _scenario.AddToCartAsync(buyer, productId);
         var id = (await _scenario.CheckoutAsync(buyer)).Single();
 
+        var sellerShipsUnpaid = await seller.Client.GraphQLAsync(ShipOrder, new { id });
+        await _scenario.PayAsync(buyer, [id]);
         var buyerShips = await buyer.GraphQLAsync(ShipOrder, new { id });
         var sellerShips = await seller.Client.GraphQLAsync(ShipOrder, new { id });
         var buyerCancelsShipped = await buyer.GraphQLAsync(CancelOrder, new { id });
         var sellerConfirms = await seller.Client.GraphQLAsync(ConfirmDelivery, new { id });
         var buyerConfirms = await buyer.GraphQLAsync(ConfirmDelivery, new { id });
 
+        sellerShipsUnpaid.AssertError("INVALID_INPUT");
         buyerShips.AssertError("FORBIDDEN");
         Assert.Equal("SHIPPED", sellerShips["shipOrder"]["status"].AsString());
         buyerCancelsShipped.AssertError("INVALID_INPUT");

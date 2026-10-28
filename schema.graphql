@@ -54,6 +54,7 @@ type Query {
     )
     @cost(weight: "10")
   orderById(id: UUID!): OrderDto @cost(weight: "10")
+  paymentById(id: UUID!): PaymentDto @cost(weight: "10")
   productReviews(
     productId: UUID!
     "Returns the first _n_ elements from the list."
@@ -181,6 +182,8 @@ type Mutation {
   shipOrder(id: UUID!): OrderDto @cost(weight: "10")
   confirmOrderDelivery(id: UUID!): OrderDto @cost(weight: "10")
   cancelOrder(id: UUID!): OrderDto @cost(weight: "10")
+  createPayment(input: CreatePaymentDtoInput!): PaymentSessionDto!
+    @cost(weight: "10")
   createReview(input: CreateReviewDtoInput!): ReviewDto! @cost(weight: "10")
   updateReview(id: UUID!, input: UpdateReviewDtoInput!): ReviewDto
     @cost(weight: "10")
@@ -283,6 +286,8 @@ type OrderDto {
   items: [OrderItemDto!]!
   deliveryAddress: DeliveryAddressDto!
   createdAt: DateTime!
+  paymentDueAt: DateTime!
+  paidAt: DateTime
   shippedAt: DateTime
   deliveredAt: DateTime
   canceledAt: DateTime
@@ -307,6 +312,22 @@ type PageInfo {
   startCursor: String
   "When paginating forwards, the cursor to continue."
   endCursor: String
+}
+
+type PaymentDto {
+  id: UUID!
+  status: PaymentStatus!
+  amount: Decimal!
+  currency: String!
+  orderIds: [UUID!]!
+  createdAt: DateTime!
+  succeededAt: DateTime
+  canceledAt: DateTime
+}
+
+type PaymentSessionDto {
+  payment: PaymentDto!
+  clientSecret: String!
 }
 
 type ProductDto {
@@ -515,6 +536,10 @@ input CreateCategoryDtoInput {
   name: String!
 }
 
+input CreatePaymentDtoInput {
+  orderIds: [UUID!]!
+}
+
 input CreateProductDtoInput {
   name: String!
   sku: String!
@@ -640,6 +665,8 @@ input OrderDtoFilterInput {
   items: ListFilterInputTypeOfOrderItemDtoFilterInput
   deliveryAddress: DeliveryAddressDtoFilterInput
   createdAt: DateTimeOperationFilterInput
+  paymentDueAt: DateTimeOperationFilterInput
+  paidAt: DateTimeOperationFilterInput
   shippedAt: DateTimeOperationFilterInput
   deliveredAt: DateTimeOperationFilterInput
   canceledAt: DateTimeOperationFilterInput
@@ -653,6 +680,8 @@ input OrderDtoSortInput {
   seller: SellerDtoSortInput @cost(weight: "10")
   deliveryAddress: DeliveryAddressDtoSortInput @cost(weight: "10")
   createdAt: SortEnumType @cost(weight: "10")
+  paymentDueAt: SortEnumType @cost(weight: "10")
+  paidAt: SortEnumType @cost(weight: "10")
   shippedAt: SortEnumType @cost(weight: "10")
   deliveredAt: SortEnumType @cost(weight: "10")
   canceledAt: SortEnumType @cost(weight: "10")
@@ -842,8 +871,15 @@ enum ApplyPolicy {
 
 enum OrderStatus {
   CREATED
+  PAID
   SHIPPED
   DELIVERED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
   CANCELED
 }
 

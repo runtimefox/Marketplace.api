@@ -5,6 +5,7 @@ namespace MyApi.Tests.Unit;
 public class OrderEntityTests
 {
     private static readonly Guid SellerId = Guid.NewGuid();
+    private static readonly TimeSpan PaymentWindow = TimeSpan.FromMinutes(30);
 
     [Fact]
     public void Create_CalculatesTotal_AndDecreasesStock()
@@ -12,7 +13,7 @@ public class OrderEntityTests
         var phone = NewProduct(stock: 10, price: 99.99m);
         var charger = NewProduct(stock: 5, price: 10m);
 
-        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(phone, 2), (charger, 3)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(phone, 2), (charger, 3)], PaymentWindow);
 
         Assert.Equal(OrderStatus.Created, order.Status);
         Assert.Equal(229.98m, order.TotalAmount);
@@ -26,7 +27,7 @@ public class OrderEntityTests
     {
         var foreignProduct = NewProduct(sellerId: Guid.NewGuid());
 
-        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(foreignProduct, 1)]));
+        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(foreignProduct, 1)], PaymentWindow));
     }
 
     [Fact]
@@ -35,7 +36,7 @@ public class OrderEntityTests
         var product = NewProduct(stock: 1);
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 2)]));
+            () => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 2)], PaymentWindow));
 
         Assert.Contains("Only 1 items", exception.Message);
     }
@@ -43,14 +44,14 @@ public class OrderEntityTests
     [Fact]
     public void Create_WithoutItems_Throws()
     {
-        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[]));
+        Assert.Throws<InvalidOperationException>(() => Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[], PaymentWindow));
     }
 
     [Fact]
     public void Cancel_ReturnsStock()
     {
         var product = NewProduct(stock: 5);
-        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 3)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(product, 3)], PaymentWindow);
 
         order.Cancel();
 
@@ -62,9 +63,15 @@ public class OrderEntityTests
     [Fact]
     public void StatusTransitions_FollowOrderLifecycle()
     {
-        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(NewProduct(), 1)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(NewProduct(), 1)], PaymentWindow);
 
         Assert.Throws<InvalidOperationException>(order.Deliver);
+        Assert.Throws<InvalidOperationException>(order.Ship);
+
+        Pay(order);
+        Assert.Equal(OrderStatus.Paid, order.Status);
+        Assert.NotNull(order.PaidAt);
+        Assert.Throws<InvalidOperationException>(order.Cancel);
 
         order.Ship();
         Assert.Throws<InvalidOperationException>(order.Cancel);
@@ -80,13 +87,71 @@ public class OrderEntityTests
     [Fact]
     public void ChangeDeliveryAddress_IsAllowedOnlyBeforeShipping()
     {
-        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)]);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], PaymentWindow);
 
         order.ChangeDeliveryAddress(NewAddress(city: "Berlin"));
+        Pay(order);
+        order.ChangeDeliveryAddress(NewAddress(city: "Munich"));
         order.Ship();
 
-        Assert.Equal("Berlin", order.DeliveryAddress.City);
+        Assert.Equal("Munich", order.DeliveryAddress.City);
         Assert.Throws<InvalidOperationException>(() => order.ChangeDeliveryAddress(NewAddress()));
+    }
+
+    [Fact]
+    public void Cancel_WithPendingPayment_Throws_UntilPaymentIsCanceled()
+    {
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], PaymentWindow);
+        var payment = Payment.Create(order.BuyerId, "eur", [order]);
+
+        Assert.Throws<InvalidOperationException>(order.Cancel);
+
+        payment.Cancel();
+        order.Cancel();
+
+        Assert.Equal(OrderStatus.Canceled, order.Status);
+    }
+
+    [Fact]
+    public void Create_SetsPaymentDeadline_AndRejectsNonPositiveWindow()
+    {
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], PaymentWindow);
+
+        Assert.Equal(order.CreatedAt + PaymentWindow, order.PaymentDueAt);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void ExpireUnpaid_IsAllowedOnlyAfterDeadline_AndReturnsStock()
+    {
+        var product = NewProduct(stock: 5);
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(product, 2)], PaymentWindow);
+
+        Assert.Throws<InvalidOperationException>(() => order.ExpireUnpaid(order.PaymentDueAt.AddSeconds(-1)));
+
+        order.ExpireUnpaid(order.PaymentDueAt);
+
+        Assert.Equal(OrderStatus.Canceled, order.Status);
+        Assert.Equal(5, product.Stock);
+    }
+
+    [Fact]
+    public void ExpireUnpaid_WithPendingOrSucceededPayment_Throws()
+    {
+        var pending = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], PaymentWindow);
+        Payment.Create(pending.BuyerId, "eur", [pending]);
+        var paid = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)], PaymentWindow);
+        Pay(paid);
+
+        Assert.Throws<InvalidOperationException>(() => pending.ExpireUnpaid(pending.PaymentDueAt));
+        Assert.Throws<InvalidOperationException>(() => paid.ExpireUnpaid(paid.PaymentDueAt));
+    }
+
+    private static void Pay(Order order)
+    {
+        var payment = Payment.Create(order.BuyerId, "eur", [order]);
+        payment.MarkSucceeded(order.TotalAmount, "eur");
     }
 
     private static DeliveryAddress NewAddress(string city = "San Francisco") =>

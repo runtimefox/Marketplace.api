@@ -28,11 +28,22 @@ public class Order
 
     public DeliveryAddress DeliveryAddress { get; private set; } = null!;
 
+    [Column("PaymentId")]
+    public Guid? PaymentId { get; private set; }
+
+    public Payment? Payment { get; private set; }
+
     [Column("CreatedAt")]
     public DateTimeOffset CreatedAt { get; private set; }
 
     [Column("UpdatedAt")]
     public DateTimeOffset UpdatedAt { get; private set; }
+
+    [Column("PaymentDueAt")]
+    public DateTimeOffset PaymentDueAt { get; private set; }
+
+    [Column("PaidAt")]
+    public DateTimeOffset? PaidAt { get; private set; }
 
     [Column("ShippedAt")]
     public DateTimeOffset? ShippedAt { get; private set; }
@@ -42,6 +53,8 @@ public class Order
 
     [Column("CanceledAt")]
     public DateTimeOffset? CanceledAt { get; private set; }
+
+    public uint Version { get; private set; }
 
     private readonly List<OrderItem> _items = [];
 
@@ -55,7 +68,8 @@ public class Order
         Guid buyerId,
         Guid sellerId,
         DeliveryAddress deliveryAddress,
-        IEnumerable<(Product Product, int Quantity)> lines)
+        IEnumerable<(Product Product, int Quantity)> lines,
+        TimeSpan paymentWindow)
     {
         if (buyerId == Guid.Empty)
         {
@@ -69,6 +83,11 @@ public class Order
 
         ArgumentNullException.ThrowIfNull(deliveryAddress);
 
+        if (paymentWindow <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(paymentWindow), "Payment window must be positive.");
+        }
+
         var now = DateTimeOffset.UtcNow;
         var order = new Order
         {
@@ -78,7 +97,8 @@ public class Order
             Status = OrderStatus.Created,
             DeliveryAddress = deliveryAddress,
             CreatedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            PaymentDueAt = now + paymentWindow
         };
 
         foreach (var (product, quantity) in lines)
@@ -97,7 +117,11 @@ public class Order
     public void ChangeDeliveryAddress(DeliveryAddress deliveryAddress)
     {
         ArgumentNullException.ThrowIfNull(deliveryAddress);
-        EnsureStatus(OrderStatus.Created, "changed");
+
+        if (Status is not (OrderStatus.Created or OrderStatus.Paid))
+        {
+            throw new InvalidOperationException($"The delivery address of an order in status {Status} cannot be changed.");
+        }
 
         DeliveryAddress = deliveryAddress;
         UpdatedAt = DateTimeOffset.UtcNow;
@@ -105,7 +129,7 @@ public class Order
 
     public void Ship()
     {
-        EnsureStatus(OrderStatus.Created, "shipped");
+        EnsureStatus(OrderStatus.Paid, "shipped");
 
         Status = OrderStatus.Shipped;
         ShippedAt = UpdatedAt = DateTimeOffset.UtcNow;
@@ -122,6 +146,12 @@ public class Order
     public void Cancel()
     {
         EnsureStatus(OrderStatus.Created, "canceled");
+        EnsurePaymentLoaded();
+
+        if (Payment is { Status: PaymentStatus.Pending })
+        {
+            throw new InvalidOperationException("The pending payment of the order must be canceled first.");
+        }
 
         foreach (var item in _items)
         {
@@ -135,6 +165,53 @@ public class Order
 
         Status = OrderStatus.Canceled;
         CanceledAt = UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ExpireUnpaid(DateTimeOffset now)
+    {
+        EnsureStatus(OrderStatus.Created, "expired");
+
+        if (now < PaymentDueAt)
+        {
+            throw new InvalidOperationException("The payment time for the order has not expired yet.");
+        }
+
+        Cancel();
+    }
+
+    internal void AttachPayment(Payment payment, DateTimeOffset now)
+    {
+        EnsureStatus(OrderStatus.Created, "paid");
+        EnsurePaymentLoaded();
+
+        if (now >= PaymentDueAt)
+        {
+            throw new InvalidOperationException("The payment time for the order has expired.");
+        }
+
+        if (Payment is { Status: PaymentStatus.Pending } current && current != payment)
+        {
+            throw new InvalidOperationException("The order already has a pending payment.");
+        }
+
+        Payment = payment;
+        PaymentId = payment.Id;
+    }
+
+    internal void MarkPaid(DateTimeOffset paidAt)
+    {
+        EnsureStatus(OrderStatus.Created, "paid");
+
+        Status = OrderStatus.Paid;
+        PaidAt = UpdatedAt = paidAt;
+    }
+
+    private void EnsurePaymentLoaded()
+    {
+        if (PaymentId is not null && Payment is null)
+        {
+            throw new InvalidOperationException("The order must be loaded with its payment.");
+        }
     }
 
     private void AddItem(Product product, int quantity)

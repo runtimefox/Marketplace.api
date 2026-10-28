@@ -15,6 +15,8 @@ public record OrderDto
     public required IReadOnlyList<OrderItemDto> Items { get; init; }
     public required DeliveryAddressDto DeliveryAddress { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
+    public required DateTimeOffset PaymentDueAt { get; init; }
+    public DateTimeOffset? PaidAt { get; init; }
     public DateTimeOffset? ShippedAt { get; init; }
     public DateTimeOffset? DeliveredAt { get; init; }
     public DateTimeOffset? CanceledAt { get; init; }
@@ -60,6 +62,8 @@ public record OrderDto
             Comment = x.DeliveryAddress.Comment
         },
         CreatedAt = x.CreatedAt,
+        PaymentDueAt = x.PaymentDueAt,
+        PaidAt = x.PaidAt,
         ShippedAt = x.ShippedAt,
         DeliveredAt = x.DeliveredAt,
         CanceledAt = x.CanceledAt

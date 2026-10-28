@@ -1,17 +1,27 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MyApi.Models.Dtos.Orders;
 using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Orders;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Services.Interfaces.Sellers;
+using MyApi.Shared.Configuration;
 using MyApi.Shared.Data;
 
 namespace MyApi.Services;
 
-public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAccess) : IOrderService
+public class OrderService(
+    AppDbContext dbContext,
+    ISellerAccessService sellerAccess,
+    IPaymentGateway paymentGateway,
+    IOptions<PaymentOptions> paymentOptions) : IOrderService
 {
     private const string StockChanged =
         "Stock of some products has changed. Please review your cart and try again.";
+
+    private const string OrderChanged =
+        "The order was changed by another request. Please try again.";
 
     public IQueryable<OrderDto> QueryBuyerOrders(Guid userId) =>
         QueryOrders(x => x.BuyerId == userId);
@@ -60,13 +70,14 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
                 userId,
                 group.Key,
                 ToDeliveryAddress(dto.DeliveryAddress),
-                group.Select(x => (x.Product, x.Quantity))))
+                group.Select(x => (x.Product, x.Quantity)),
+                paymentOptions.Value.PaymentWindow))
             .ToList();
 
         dbContext.Orders.AddRange(orders);
         dbContext.CartItems.RemoveRange(cartItems);
 
-        await SaveAsync(ct);
+        await SaveAsync(ct, StockChanged);
 
         var orderIds = orders.Select(x => x.Id).ToList();
 
@@ -131,6 +142,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
     public async Task<OrderDto?> CancelOrderAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
         var order = await dbContext.Orders
+            .Include(x => x.Payment)
             .Include(x => x.Items)
             .ThenInclude(x => x.Product)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -141,6 +153,11 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         }
 
         await EnsureBuyerOrMemberAsync(userId, order.BuyerId, order.SellerId, ct);
+
+        if (order.Status == OrderStatus.Created && order.Payment is not null)
+        {
+            await paymentGateway.CancelPendingPaymentAsync(order.Payment, ct);
+        }
 
         order.Cancel();
         await SaveAsync(ct);
@@ -170,7 +187,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
             .OrderByDescending(x => x.CreatedAt)
             .Select(OrderDto.Projection);
 
-    private async Task SaveAsync(CancellationToken ct)
+    private async Task SaveAsync(CancellationToken ct, string conflictMessage = OrderChanged)
     {
         try
         {
@@ -178,7 +195,7 @@ public class OrderService(AppDbContext dbContext, ISellerAccessService sellerAcc
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new InvalidOperationException(StockChanged);
+            throw new InvalidOperationException(conflictMessage);
         }
     }
 }
