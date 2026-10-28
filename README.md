@@ -20,10 +20,10 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 | Area | Technology |
 |---|---|
 | Runtime | .NET 10, ASP.NET Core |
-| API | GraphQL (HotChocolate 16), REST controllers for authentication |
+| API | GraphQL (HotChocolate 16); REST for authentication, image uploads and the Stripe webhook |
 | Data | PostgreSQL 17, Entity Framework Core 10 (Npgsql) |
 | Auth | JWT bearer tokens stored in HttpOnly cookies |
-| Files | MinIO (S3-compatible) via AWSSDK.S3, SkiaSharp for image processing |
+| Files | S3-compatible storage via AWSSDK.S3 (MinIO locally), SkiaSharp for image processing |
 | Payments | Stripe (Stripe.net, PaymentIntents + webhooks) |
 | Tests | xUnit, `WebApplicationFactory`, Testcontainers |
 | CI | GitHub Actions |
@@ -35,6 +35,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [Docker](https://www.docker.com/)
 - EF Core CLI: `dotnet tool install --global dotnet-ef --version 10.0.12`
+- [Stripe CLI](https://docs.stripe.com/stripe-cli) for local payment webhooks: `brew install stripe/stripe-cli/stripe`, then `stripe login`
 
 ### 1. Start PostgreSQL and MinIO
 
@@ -53,6 +54,14 @@ docker compose up -d
 
 This starts PostgreSQL and MinIO; the one-off `minio-init` container creates the public `myapi-images` bucket. The MinIO console is at http://localhost:9001 (`minioadmin` / `minioadmin` unless `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` are set in `.env`). `appsettings.Development.json` already points the API at this MinIO.
 
+MinIO no longer publishes public images, so compose and tests use `cgr.dev/chainguard/minio` (pinned by digest). It runs as UID 65532; a `myapi_miniodata` volume created by the old `quay.io/minio` image needs a one-time ownership change:
+
+```bash
+docker compose stop minio
+docker run --rm -v myapi_miniodata:/data alpine chown -R 65532:65532 /data
+docker compose up -d
+```
+
 ### 2. Configure secrets
 
 Secrets are kept in [user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets), not in `appsettings.json`:
@@ -64,7 +73,7 @@ dotnet user-secrets set "Stripe:SecretKey" "sk_test_..."
 dotnet user-secrets set "Stripe:WebhookSecret" "whsec_..."
 ```
 
-The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:WebhookSecret`. Use test-mode keys from the Stripe Dashboard. For local webhooks run the [Stripe CLI](https://docs.stripe.com/stripe-cli) and put the `whsec_...` secret it prints into `Stripe:WebhookSecret`:
+The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:WebhookSecret`. Take the test-mode secret key (`sk_test_...`) from Stripe Dashboard → Developers → API keys. For local webhooks keep the Stripe CLI running in a separate terminal and put the `whsec_...` secret it prints into `Stripe:WebhookSecret` (it stays the same between runs):
 
 ```bash
 stripe listen --events payment_intent.succeeded,payment_intent.canceled --forward-to http://localhost:5086/api/payments/stripe/webhook
@@ -84,7 +93,7 @@ dotnet run --launch-profile http
 
 ### Run with Docker
 
-The `Dockerfile` builds two images: `api` (the application) and `migrations` (an EF Core migrations bundle). In `docker-compose.yml` both are behind the `app` profile, so `docker compose up -d` still starts only PostgreSQL.
+The `Dockerfile` builds two images: `api` (the application) and `migrations` (an EF Core migrations bundle). In `docker-compose.yml` both are behind the `app` profile, so `docker compose up -d` still starts only PostgreSQL and MinIO.
 
 Add to `.env`:
 
@@ -100,7 +109,9 @@ FRONTEND_ORIGIN=http://localhost:5173
 docker compose --profile app up --build
 ```
 
-Compose waits for PostgreSQL and MinIO, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data and no Swagger.
+The API does not read `.env` itself: these values are passed to the container by compose, while `dotnet run` uses user secrets. Optional: `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, `STORAGE_BUCKET` (`myapi-images`) and `STORAGE_PUBLIC_URL` (`http://localhost:9000`, the public address of the storage used in image URLs).
+
+Compose waits for PostgreSQL and MinIO, applies migrations in the `migrations` container and then starts the API at http://localhost:8080/graphql. Containers run in the Production environment: no demo data, no Swagger and auth cookies are `Secure`. For local webhooks forward Stripe events to the container port: `--forward-to http://localhost:8080/api/payments/stripe/webhook`.
 
 To apply migrations to another database with the image:
 
@@ -217,24 +228,24 @@ dotnet test tests/MyApi.Tests
 dotnet test tests/MyApi.Tests --filter "FullyQualifiedName~MyApi.Tests.Unit"
 ```
 
-- **Integration tests** start the whole application against a PostgreSQL container (Testcontainers) with real migrations and cover auth, access rules, cart, orders, payments (with a fake Stripe gateway and signed webhooks), stock concurrency and reviews. Docker must be running.
-- **Unit tests** cover entity invariants and do not need Docker.
+- **Integration tests** start the whole application against PostgreSQL and MinIO containers (Testcontainers) with real migrations and cover auth, access rules, catalog and search, cart, orders, payments (with a fake Stripe gateway and signed webhooks), expiration of unpaid orders, stock concurrency, reviews, image uploads, CORS, rate limiting, forwarded headers and the GraphQL schema snapshot. Docker must be running.
+- **Unit tests** cover entity invariants, search query building, error mapping and image processing, and do not need Docker.
 
 ## Project structure
 
 ```
-Controllers/        REST endpoints (auth, users)
+Controllers/        REST endpoints (auth, users, image uploads, Stripe webhook)
 GraphQL/            GraphQL queries and mutations grouped by feature
 Models/Entities/    Domain entities with their invariants
 Models/Dtos/        Request and response DTOs grouped by feature
-Services/           Business logic behind interfaces in Services/Interfaces
-Shared/             DbContext, seed data, auth helpers, configuration
+Services/           Business logic, Stripe and S3 integrations behind interfaces in Services/Interfaces
+Shared/             DbContext, seed data, search, auth helpers, configuration, error mapping
 Migrations/         EF Core migrations
 tests/MyApi.Tests/  Integration and unit tests
 ```
 
 ## Development workflow
 
-- Create feature branches from `dev` and open pull requests into `dev`; `dev` is released to `main` through a pull request.
+- Create feature branches from `dev` and open pull requests into `dev` (squash merge). `dev` is released to `main` through a pull request merged with a merge commit, not a squash: a squashed release leaves `main` with a commit `dev` does not have, and the next release conflicts.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `feat`, `fix`, `refactor`, `test`, `ci`, `chore`, `docs`.
 - CI builds the project, fails when a model change has no migration and runs all tests. Pull requests into `dev` and `main` can be merged only when CI passes.
