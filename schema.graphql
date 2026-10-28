@@ -286,6 +286,7 @@ type OrderDto {
   items: [OrderItemDto!]!
   deliveryAddress: DeliveryAddressDto!
   createdAt: DateTime!
+  paymentDueAt: DateTime!
   paidAt: DateTime
   shippedAt: DateTime
   deliveredAt: DateTime
@@ -664,6 +665,7 @@ input OrderDtoFilterInput {
   items: ListFilterInputTypeOfOrderItemDtoFilterInput
   deliveryAddress: DeliveryAddressDtoFilterInput
   createdAt: DateTimeOperationFilterInput
+  paymentDueAt: DateTimeOperationFilterInput
   paidAt: DateTimeOperationFilterInput
   shippedAt: DateTimeOperationFilterInput
   deliveredAt: DateTimeOperationFilterInput
@@ -678,6 +680,7 @@ input OrderDtoSortInput {
   seller: SellerDtoSortInput @cost(weight: "10")
   deliveryAddress: DeliveryAddressDtoSortInput @cost(weight: "10")
   createdAt: SortEnumType @cost(weight: "10")
+  paymentDueAt: SortEnumType @cost(weight: "10")
   paidAt: SortEnumType @cost(weight: "10")
   shippedAt: SortEnumType @cost(weight: "10")
   deliveredAt: SortEnumType @cost(weight: "10")

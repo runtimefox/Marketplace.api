@@ -69,7 +69,8 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
             new Dictionary<string, string?>
             {
                 ["Frontend:AllowedOrigins:0"] = FrontendOrigin,
-                ["RateLimiting:Auth:PermitLimit"] = "100000"
+                ["RateLimiting:Auth:PermitLimit"] = "100000",
+                ["Payments:ExpirationCheckIntervalSeconds"] = "86400"
             }));
         builder.ConfigureTestServices(services => services.AddSingleton<IPaymentGateway>(PaymentGateway));
     }

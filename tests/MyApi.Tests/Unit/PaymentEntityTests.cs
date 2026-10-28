@@ -111,6 +111,6 @@ public class PaymentEntityTests
         var address = new DeliveryAddress(
             "Test Buyer", "+14155550142", "United States", "San Francisco", "500 Market Street", null, "94105", null);
 
-        return Order.Create(BuyerId, sellerId, address, [(product, quantity)]);
+        return Order.Create(BuyerId, sellerId, address, [(product, quantity)], TimeSpan.FromMinutes(30));
     }
 }

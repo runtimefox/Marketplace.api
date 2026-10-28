@@ -53,6 +53,11 @@ public class PaymentService(
             throw new InvalidOperationException("Only orders awaiting payment can be paid.");
         }
 
+        if (orders.Any(x => x.PaymentDueAt <= DateTimeOffset.UtcNow))
+        {
+            throw new InvalidOperationException("The payment time for some of the orders has expired.");
+        }
+
         var pendingPayments = orders
             .Select(x => x.Payment)
             .OfType<Payment>()

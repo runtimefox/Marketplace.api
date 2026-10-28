@@ -146,6 +146,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasIndex(x => new { x.SellerId, x.Status });
 
         modelBuilder.Entity<Order>()
+            .HasIndex(x => new { x.Status, x.PaymentDueAt });
+
+        modelBuilder.Entity<Order>()
             .HasOne(x => x.Buyer)
             .WithMany()
             .HasForeignKey(x => x.BuyerId)

@@ -39,6 +39,9 @@ public class Order
     [Column("UpdatedAt")]
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    [Column("PaymentDueAt")]
+    public DateTimeOffset PaymentDueAt { get; private set; }
+
     [Column("PaidAt")]
     public DateTimeOffset? PaidAt { get; private set; }
 
@@ -65,7 +68,8 @@ public class Order
         Guid buyerId,
         Guid sellerId,
         DeliveryAddress deliveryAddress,
-        IEnumerable<(Product Product, int Quantity)> lines)
+        IEnumerable<(Product Product, int Quantity)> lines,
+        TimeSpan paymentWindow)
     {
         if (buyerId == Guid.Empty)
         {
@@ -79,6 +83,11 @@ public class Order
 
         ArgumentNullException.ThrowIfNull(deliveryAddress);
 
+        if (paymentWindow <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(paymentWindow), "Payment window must be positive.");
+        }
+
         var now = DateTimeOffset.UtcNow;
         var order = new Order
         {
@@ -88,7 +97,8 @@ public class Order
             Status = OrderStatus.Created,
             DeliveryAddress = deliveryAddress,
             CreatedAt = now,
-            UpdatedAt = now
+            UpdatedAt = now,
+            PaymentDueAt = now + paymentWindow
         };
 
         foreach (var (product, quantity) in lines)
@@ -157,10 +167,27 @@ public class Order
         CanceledAt = UpdatedAt = DateTimeOffset.UtcNow;
     }
 
-    internal void AttachPayment(Payment payment)
+    public void ExpireUnpaid(DateTimeOffset now)
+    {
+        EnsureStatus(OrderStatus.Created, "expired");
+
+        if (now < PaymentDueAt)
+        {
+            throw new InvalidOperationException("The payment time for the order has not expired yet.");
+        }
+
+        Cancel();
+    }
+
+    internal void AttachPayment(Payment payment, DateTimeOffset now)
     {
         EnsureStatus(OrderStatus.Created, "paid");
         EnsurePaymentLoaded();
+
+        if (now >= PaymentDueAt)
+        {
+            throw new InvalidOperationException("The payment time for the order has expired.");
+        }
 
         if (Payment is { Status: PaymentStatus.Pending } current && current != payment)
         {

@@ -180,6 +180,8 @@ builder.Services.AddScoped<ISellerAccessService, SellerAccessService>();
 builder.Services.AddScoped<ISellerMemberService, SellerMemberService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IOrderExpirationService, OrderExpirationService>();
+builder.Services.AddHostedService<OrderExpirationWorker>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();

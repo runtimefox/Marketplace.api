@@ -97,7 +97,7 @@ public class Payment
 
         foreach (var order in orders)
         {
-            order.AttachPayment(payment);
+            order.AttachPayment(payment, now);
             payment._orders.Add(order);
             payment.Amount += order.TotalAmount;
         }

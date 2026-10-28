@@ -1,7 +1,9 @@
 using System.Text.Json.Nodes;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Auth;
+using MyApi.Services.Interfaces.Orders;
 using MyApi.Shared.Data;
 
 namespace MyApi.Tests.Infrastructure;
@@ -190,6 +192,23 @@ public sealed class Scenario(MyApiFactory factory)
         await PayAsync(buyer, [orderId]);
 
         return orderId;
+    }
+
+    public async Task MovePaymentDeadlineToPastAsync(Guid orderId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        await dbContext.Orders
+            .Where(x => x.Id == orderId)
+            .ExecuteUpdateAsync(x => x.SetProperty(o => o.PaymentDueAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+    }
+
+    public async Task CancelExpiredOrdersAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+
+        await scope.ServiceProvider.GetRequiredService<IOrderExpirationService>().CancelExpiredOrdersAsync();
     }
 
     public async Task<Guid> DeliveredOrderAsync(ApiClient buyer, SellerAccount seller, Guid productId)

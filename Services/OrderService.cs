@@ -1,10 +1,12 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MyApi.Models.Dtos.Orders;
 using MyApi.Models.Entities;
 using MyApi.Services.Interfaces.Orders;
 using MyApi.Services.Interfaces.Payments;
 using MyApi.Services.Interfaces.Sellers;
+using MyApi.Shared.Configuration;
 using MyApi.Shared.Data;
 
 namespace MyApi.Services;
@@ -12,7 +14,8 @@ namespace MyApi.Services;
 public class OrderService(
     AppDbContext dbContext,
     ISellerAccessService sellerAccess,
-    IPaymentGateway paymentGateway) : IOrderService
+    IPaymentGateway paymentGateway,
+    IOptions<PaymentOptions> paymentOptions) : IOrderService
 {
     private const string StockChanged =
         "Stock of some products has changed. Please review your cart and try again.";
@@ -67,7 +70,8 @@ public class OrderService(
                 userId,
                 group.Key,
                 ToDeliveryAddress(dto.DeliveryAddress),
-                group.Select(x => (x.Product, x.Quantity))))
+                group.Select(x => (x.Product, x.Quantity)),
+                paymentOptions.Value.PaymentWindow))
             .ToList();
 
         dbContext.Orders.AddRange(orders);

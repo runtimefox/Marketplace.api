@@ -112,6 +112,10 @@ namespace MyApi.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("PaidAt");
 
+                    b.Property<DateTimeOffset>("PaymentDueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("PaymentDueAt");
+
                     b.Property<Guid?>("PaymentId")
                         .HasColumnType("uuid")
                         .HasColumnName("PaymentId");
@@ -152,6 +156,8 @@ namespace MyApi.Migrations
                     b.HasIndex("BuyerId", "CreatedAt");
 
                     b.HasIndex("SellerId", "Status");
+
+                    b.HasIndex("Status", "PaymentDueAt");
 
                     b.ToTable("Orders");
                 });
