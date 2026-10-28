@@ -10,7 +10,8 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - **Accounts** — registration, JWT in HttpOnly cookies, refresh token rotation with reuse detection, profile and password change, `Customer` / `Admin` roles
 - **Shops** — sign up as a seller, shop owner and managers, seller cabinet with all shop products and orders
 - **Catalog** — products and categories with paging, filtering and sorting; full-text product search by name and description
-- **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
+- **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → PAID → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
+- **Payments** — Stripe PaymentIntents: one payment covers all orders of a checkout, orders become paid only after a signed Stripe webhook
 - **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
 - **Images** — product galleries (up to 10 photos), shop logos and user avatars; uploads are validated, converted to WebP in two sizes and stored in S3-compatible storage
 
@@ -23,6 +24,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 | Data | PostgreSQL 17, Entity Framework Core 10 (Npgsql) |
 | Auth | JWT bearer tokens stored in HttpOnly cookies |
 | Files | MinIO (S3-compatible) via AWSSDK.S3, SkiaSharp for image processing |
+| Payments | Stripe (Stripe.net, PaymentIntents + webhooks) |
 | Tests | xUnit, `WebApplicationFactory`, Testcontainers |
 | CI | GitHub Actions |
 
@@ -58,9 +60,15 @@ Secrets are kept in [user secrets](https://learn.microsoft.com/aspnet/core/secur
 ```bash
 dotnet user-secrets set "ConnectionStrings:DbConnection" "Host=localhost;Port=5432;Database=myapi;Username=postgres;Password=change-me"
 dotnet user-secrets set "Jwt:Key" "<random string, at least 32 characters>"
+dotnet user-secrets set "Stripe:SecretKey" "sk_test_..."
+dotnet user-secrets set "Stripe:WebhookSecret" "whsec_..."
 ```
 
-The app does not start without `Jwt:Key`.
+The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:WebhookSecret`. Use test-mode keys from the Stripe Dashboard. For local webhooks run the [Stripe CLI](https://docs.stripe.com/stripe-cli) and put the `whsec_...` secret it prints into `Stripe:WebhookSecret`:
+
+```bash
+stripe listen --forward-to http://localhost:5086/api/payments/stripe/webhook
+```
 
 ### 3. Apply migrations and run
 
@@ -82,6 +90,8 @@ Add to `.env`:
 
 ```env
 JWT_KEY=<random string, at least 32 characters>
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 API_PORT=8080
 FRONTEND_ORIGIN=http://localhost:5173
 ```
@@ -101,7 +111,7 @@ docker run --rm myapi-migrations --connection "Host=...;Port=5432;Database=...;U
 
 ### Demo data
 
-In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`. Demo products have USD prices and generated photos, shops get logos and demo users get avatars; images require MinIO to be running (otherwise the API starts and logs a warning, and the images are created on the next start).
+In the Development environment the database is seeded on startup. All demo accounts use the password `Password123`. Demo products have EUR prices and generated photos, shops get logos and demo users get avatars; images require MinIO to be running (otherwise the API starts and logs a warning, and the images are created on the next start).
 
 | Email | Role |
 |---|---|
@@ -147,6 +157,17 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 - GraphQL exposes URLs only: `images { id position smallUrl largeUrl }` and `mainImage` on products, `logo` on shops, `avatar` on users and review authors.
 - A product has up to 10 photos. Replaced and deleted images are removed from storage.
 
+### Payments
+
+1. `checkout` creates orders in status `CREATED`.
+2. `createPayment(input: { orderIds })` creates one Stripe PaymentIntent for the total of the given orders (usually all orders of the checkout) and returns `clientSecret` and `payment { id status amount currency }`. Calling it again for the same orders returns the same payment; a different set of orders cancels the previous pending payment and creates a new one.
+3. The frontend confirms the payment with Stripe.js (Payment Element) using `clientSecret` and the publishable key.
+4. Stripe calls `POST /api/payments/stripe/webhook`; on `payment_intent.succeeded` the payment becomes `SUCCEEDED` and its orders `PAID`. Poll `paymentById(id)` or `orderById(id)` to show the result.
+
+An order must be paid within `Payments:PaymentWindowMinutes` (30 minutes by default, see `paymentDueAt` on the order). A background job checks every `Payments:ExpirationCheckIntervalSeconds` (60) and cancels expired unpaid orders: it cancels their pending PaymentIntent and returns the stock. If Stripe has already charged the buyer, the order is kept and becomes `PAID` when the webhook arrives.
+
+Only paid orders can be shipped. Canceling an unpaid order cancels its pending PaymentIntent; paid orders cannot be canceled yet (refunds are not implemented). The currency is set in `Payments:Currency` (`eur`).
+
 ### GraphQL
 
 | Area | Queries | Mutations |
@@ -154,6 +175,7 @@ Registration, sign-in and password change are limited to 10 requests per minute 
 | Catalog | `products`, `productById`, `categories`, `categoryById` | `createCategory`, `updateCategory`, `deleteCategory` (admin) |
 | Shops | `sellers`, `sellerById`, `mySellers`, `sellerMembers`, `sellerProducts` | `createSeller`, `updateSeller`, `deleteSeller`, `addSellerManager`, `removeSellerMember`, `createProduct`, `updateProduct`, `activateProduct`, `deleteProduct` |
 | Cart and orders | `myCart`, `myOrders`, `sellerOrders`, `orderById` | `addToCart`, `updateCartItem`, `removeFromCart`, `clearCart`, `checkout`, `updateOrderDeliveryAddress`, `shipOrder`, `confirmOrderDelivery`, `cancelOrder` |
+| Payments | `paymentById` | `createPayment` |
 | Reviews | `productReviews`, `myReviews`, `canReviewProduct` | `createReview`, `updateReview`, `deleteReview` |
 | Users | `me`, `users` (admin) | — |
 
@@ -195,7 +217,7 @@ dotnet test tests/MyApi.Tests
 dotnet test tests/MyApi.Tests --filter "FullyQualifiedName~MyApi.Tests.Unit"
 ```
 
-- **Integration tests** start the whole application against a PostgreSQL container (Testcontainers) with real migrations and cover auth, access rules, cart, orders, stock concurrency and reviews. Docker must be running.
+- **Integration tests** start the whole application against a PostgreSQL container (Testcontainers) with real migrations and cover auth, access rules, cart, orders, payments (with a fake Stripe gateway and signed webhooks), stock concurrency and reviews. Docker must be running.
 - **Unit tests** cover entity invariants and do not need Docker.
 
 ## Project structure
