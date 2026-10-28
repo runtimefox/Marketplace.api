@@ -65,6 +65,12 @@ public class OrderEntityTests
         var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(),[(NewProduct(), 1)]);
 
         Assert.Throws<InvalidOperationException>(order.Deliver);
+        Assert.Throws<InvalidOperationException>(order.Ship);
+
+        Pay(order);
+        Assert.Equal(OrderStatus.Paid, order.Status);
+        Assert.NotNull(order.PaidAt);
+        Assert.Throws<InvalidOperationException>(order.Cancel);
 
         order.Ship();
         Assert.Throws<InvalidOperationException>(order.Cancel);
@@ -83,10 +89,32 @@ public class OrderEntityTests
         var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)]);
 
         order.ChangeDeliveryAddress(NewAddress(city: "Berlin"));
+        Pay(order);
+        order.ChangeDeliveryAddress(NewAddress(city: "Munich"));
         order.Ship();
 
-        Assert.Equal("Berlin", order.DeliveryAddress.City);
+        Assert.Equal("Munich", order.DeliveryAddress.City);
         Assert.Throws<InvalidOperationException>(() => order.ChangeDeliveryAddress(NewAddress()));
+    }
+
+    [Fact]
+    public void Cancel_WithPendingPayment_Throws_UntilPaymentIsCanceled()
+    {
+        var order = Order.Create(Guid.NewGuid(), SellerId, NewAddress(), [(NewProduct(), 1)]);
+        var payment = Payment.Create(order.BuyerId, "eur", [order]);
+
+        Assert.Throws<InvalidOperationException>(order.Cancel);
+
+        payment.Cancel();
+        order.Cancel();
+
+        Assert.Equal(OrderStatus.Canceled, order.Status);
+    }
+
+    private static void Pay(Order order)
+    {
+        var payment = Payment.Create(order.BuyerId, "eur", [order]);
+        payment.MarkSucceeded(order.TotalAmount, "eur");
     }
 
     private static DeliveryAddress NewAddress(string city = "San Francisco") =>

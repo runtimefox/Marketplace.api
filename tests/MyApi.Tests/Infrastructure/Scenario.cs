@@ -19,6 +19,9 @@ public sealed class Scenario(MyApiFactory factory)
     public const string CheckoutMutation =
         "mutation ($input: CheckoutDtoInput!) { checkout(input: $input) { id } }";
 
+    public const string CreatePaymentMutation =
+        "mutation ($orderIds: [UUID!]!) { createPayment(input: { orderIds: $orderIds }) { clientSecret payment { id status amount currency orderIds } } }";
+
     public static object DeliveryAddressInput(string phone = "+1 (415) 555-0142", string city = "San Francisco") => new
     {
         recipientName = "Test Buyer",
@@ -152,10 +155,46 @@ public sealed class Scenario(MyApiFactory factory)
         return response["checkout"].AsArray().Select(x => x!["id"].AsGuid()).ToList();
     }
 
+    public async Task<Guid> CreatePaymentAsync(ApiClient buyer, IReadOnlyList<Guid> orderIds)
+    {
+        var response = await buyer.GraphQLAsync(CreatePaymentMutation, new { orderIds });
+
+        return response["createPayment"]["payment"]!["id"].AsGuid();
+    }
+
+    public async Task<HttpResponseMessage> SendPaymentWebhookAsync(Guid paymentId, string type = StripeWebhook.Succeeded)
+    {
+        var intent = factory.PaymentGateway.IntentFor(paymentId);
+        if (type == StripeWebhook.Succeeded)
+        {
+            factory.PaymentGateway.MarkSucceeded(intent.Id);
+        }
+
+        var payload = StripeWebhook.Payload(type, intent.Id, (long)(intent.Request.Amount * 100), intent.Request.Currency);
+
+        return await factory.CreateApiClient().SendAsync(StripeWebhook.Request(payload));
+    }
+
+    public async Task<Guid> PayAsync(ApiClient buyer, IReadOnlyList<Guid> orderIds)
+    {
+        var paymentId = await CreatePaymentAsync(buyer, orderIds);
+        (await SendPaymentWebhookAsync(paymentId)).EnsureSuccessStatusCode();
+
+        return paymentId;
+    }
+
+    public async Task<Guid> PaidOrderAsync(ApiClient buyer, Guid productId, int quantity = 1)
+    {
+        await AddToCartAsync(buyer, productId, quantity);
+        var orderId = (await CheckoutAsync(buyer)).Single();
+        await PayAsync(buyer, [orderId]);
+
+        return orderId;
+    }
+
     public async Task<Guid> DeliveredOrderAsync(ApiClient buyer, SellerAccount seller, Guid productId)
     {
-        await AddToCartAsync(buyer, productId);
-        var orderId = (await CheckoutAsync(buyer)).Single();
+        var orderId = await PaidOrderAsync(buyer, productId);
 
         (await seller.Client.GraphQLAsync(
             "mutation ($id: UUID!) { shipOrder(id: $id) { status } }",

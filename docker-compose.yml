@@ -81,6 +81,8 @@ services:
       Storage__BucketName: ${STORAGE_BUCKET:-myapi-images}
       Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      Stripe__SecretKey: ${STRIPE_SECRET_KEY:-}
+      Stripe__WebhookSecret: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
       - "${API_PORT:-8080}:8080"
 

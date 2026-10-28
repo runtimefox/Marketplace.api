@@ -3,9 +3,11 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Shared.Data;
 using Testcontainers.Minio;
 using Testcontainers.PostgreSql;
@@ -15,6 +17,7 @@ namespace MyApi.Tests.Infrastructure;
 public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string FrontendOrigin = "http://localhost:5173";
+    public const string StripeWebhookSecret = "whsec_integration_tests";
 
     private const string EnvironmentName = "Testing";
     private const string JwtKey = "integration-tests-jwt-signing-key-0123456789";
@@ -25,6 +28,8 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
     private readonly MinioContainer _storage =
         new MinioBuilder("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z").Build();
+
+    public FakePaymentGateway PaymentGateway { get; } = new();
 
     public async Task InitializeAsync()
     {
@@ -41,6 +46,8 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
         Environment.SetEnvironmentVariable("Storage__AccessKey", _storage.GetAccessKey());
         Environment.SetEnvironmentVariable("Storage__SecretKey", _storage.GetSecretKey());
         Environment.SetEnvironmentVariable("Storage__Region", StorageRegion);
+        Environment.SetEnvironmentVariable("Stripe__SecretKey", "sk_test_integration_tests");
+        Environment.SetEnvironmentVariable("Stripe__WebhookSecret", StripeWebhookSecret);
 
         await CreatePublicBucketAsync(storageUrl);
 
@@ -64,6 +71,7 @@ public sealed class MyApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
                 ["Frontend:AllowedOrigins:0"] = FrontendOrigin,
                 ["RateLimiting:Auth:PermitLimit"] = "100000"
             }));
+        builder.ConfigureTestServices(services => services.AddSingleton<IPaymentGateway>(PaymentGateway));
     }
 
     async Task IAsyncLifetime.DisposeAsync()

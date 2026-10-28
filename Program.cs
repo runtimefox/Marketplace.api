@@ -18,6 +18,7 @@ using MyApi.GraphQL.Cart;
 using MyApi.GraphQL.Categories;
 using MyApi.GraphQL.Images;
 using MyApi.GraphQL.Orders;
+using MyApi.GraphQL.Payments;
 using MyApi.GraphQL.Products;
 using MyApi.GraphQL.Reviews;
 using MyApi.GraphQL.Sellers;
@@ -28,6 +29,7 @@ using MyApi.Services.Interfaces.Cart;
 using MyApi.Services.Interfaces.Categories;
 using MyApi.Services.Interfaces.Images;
 using MyApi.Services.Interfaces.Orders;
+using MyApi.Services.Interfaces.Payments;
 using MyApi.Services.Interfaces.Products;
 using MyApi.Services.Interfaces.Reviews;
 using MyApi.Services.Interfaces.Sellers;
@@ -188,6 +190,24 @@ builder.Services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
 builder.Services.AddSingleton<IImageStorage, ImageStorage>();
 builder.Services.AddSingleton<IImageUrlBuilder, ImageUrlBuilder>();
 builder.Services.AddSingleton<IFileStorage, S3FileStorage>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddSingleton<IPaymentGateway, StripePaymentGateway>();
+builder.Services.AddSingleton<IPaymentWebhookParser, StripeWebhookParser>();
+
+builder.Services
+    .AddOptions<PaymentOptions>()
+    .Bind(builder.Configuration.GetSection(PaymentOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<StripeOptions>()
+    .Bind(builder.Configuration.GetSection(StripeOptions.SectionName))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<Stripe.IStripeClient>(services =>
+    new Stripe.StripeClient(services.GetRequiredService<IOptions<StripeOptions>>().Value.SecretKey));
 
 builder.Services
     .AddOptions<StorageOptions>()
@@ -241,6 +261,8 @@ builder.Services
     .AddTypeExtension<CartMutations>()
     .AddTypeExtension<OrderQueries>()
     .AddTypeExtension<OrderMutations>()
+    .AddTypeExtension<PaymentQueries>()
+    .AddTypeExtension<PaymentMutations>()
     .AddTypeExtension<ReviewQueries>()
     .AddTypeExtension<ReviewMutations>()
     .AddTypeExtension<ProductQueries>()

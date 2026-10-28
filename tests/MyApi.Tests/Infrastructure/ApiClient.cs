@@ -19,6 +19,8 @@ public sealed class ApiClient(HttpClient http)
 
     public Task<HttpResponseMessage> DeleteAsync(string url) => http.DeleteAsync(url);
 
+    public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request) => http.SendAsync(request);
+
     public Task<HttpResponseMessage> UploadAsync(HttpMethod method, string url, byte[] content, string contentType)
     {
         var file = new ByteArrayContent(content);
