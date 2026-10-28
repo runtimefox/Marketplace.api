@@ -18,7 +18,7 @@ services:
       retries: 5
 
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: cgr.dev/chainguard/minio@sha256:e70b2b1e74d79457f808710483bd726ff364529ca30736eaa15a6ab547d3a5a7
     container_name: myapi-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -32,7 +32,7 @@ services:
       - miniodata:/data
 
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: cgr.dev/chainguard/minio-client@sha256:78e1d95a22be2ce6704d3d00605b907f4c65a59dd8e0f70669371570e2167570
     depends_on:
       minio:
         condition: service_started
