@@ -188,6 +188,11 @@ type Mutation {
   updateReview(id: UUID!, input: UpdateReviewDtoInput!): ReviewDto
     @cost(weight: "10")
   deleteReview(id: UUID!): Boolean! @cost(weight: "10")
+  createReviewReply(input: CreateReviewReplyDtoInput!): ReviewReplyDto!
+    @cost(weight: "10")
+  updateReviewReply(id: UUID!, input: UpdateReviewReplyDtoInput!): ReviewReplyDto
+    @cost(weight: "10")
+  deleteReviewReply(id: UUID!): Boolean! @cost(weight: "10")
   createProduct(input: CreateProductDtoInput!): ProductDto! @cost(weight: "10")
   updateProduct(id: UUID!, input: UpdateProductDtoInput!): ProductDto
     @cost(weight: "10")
@@ -406,6 +411,16 @@ type ReviewDto {
   product: ProductSummaryDto!
   createdAt: DateTime!
   updatedAt: DateTime!
+  replies: [ReviewReplyDto!]!
+}
+
+type ReviewReplyDto {
+  id: UUID!
+  text: String!
+  isFromSeller: Boolean!
+  author: UserSummaryDto!
+  createdAt: DateTime!
+  updatedAt: DateTime!
 }
 
 type SellerDto {
@@ -556,6 +571,11 @@ input CreateReviewDtoInput {
   comment: String
 }
 
+input CreateReviewReplyDtoInput {
+  reviewId: UUID!
+  text: String!
+}
+
 input CreateSellerDtoInput {
   name: String!
 }
@@ -651,6 +671,13 @@ input ListFilterInputTypeOfProductImageDtoFilterInput {
   all: ProductImageDtoFilterInput @cost(weight: "10")
   none: ProductImageDtoFilterInput @cost(weight: "10")
   some: ProductImageDtoFilterInput @cost(weight: "10")
+  any: Boolean @cost(weight: "10")
+}
+
+input ListFilterInputTypeOfReviewReplyDtoFilterInput {
+  all: ReviewReplyDtoFilterInput @cost(weight: "10")
+  none: ReviewReplyDtoFilterInput @cost(weight: "10")
+  some: ReviewReplyDtoFilterInput @cost(weight: "10")
   any: Boolean @cost(weight: "10")
 }
 
@@ -765,6 +792,7 @@ input ReviewDtoFilterInput {
   product: ProductSummaryDtoFilterInput
   createdAt: DateTimeOperationFilterInput
   updatedAt: DateTimeOperationFilterInput
+  replies: ListFilterInputTypeOfReviewReplyDtoFilterInput
 }
 
 input ReviewDtoSortInput {
@@ -775,6 +803,17 @@ input ReviewDtoSortInput {
   product: ProductSummaryDtoSortInput @cost(weight: "10")
   createdAt: SortEnumType @cost(weight: "10")
   updatedAt: SortEnumType @cost(weight: "10")
+}
+
+input ReviewReplyDtoFilterInput {
+  and: [ReviewReplyDtoFilterInput!]
+  or: [ReviewReplyDtoFilterInput!]
+  id: UuidOperationFilterInput
+  text: StringOperationFilterInput
+  isFromSeller: BooleanOperationFilterInput
+  author: UserSummaryDtoFilterInput
+  createdAt: DateTimeOperationFilterInput
+  updatedAt: DateTimeOperationFilterInput
 }
 
 input SellerDtoFilterInput {
@@ -826,6 +865,10 @@ input UpdateProductDtoInput {
 input UpdateReviewDtoInput {
   rating: Int!
   comment: String
+}
+
+input UpdateReviewReplyDtoInput {
+  text: String!
 }
 
 input UpdateSellerDtoInput {

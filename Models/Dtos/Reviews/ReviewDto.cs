@@ -14,6 +14,7 @@ public record ReviewDto
     public required ProductSummaryDto Product { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
+    public required IReadOnlyList<ReviewReplyDto> Replies { get; init; }
 
     public static Expression<Func<Review, ReviewDto>> Projection => x => new ReviewDto
     {
@@ -32,6 +33,23 @@ public record ReviewDto
             Name = x.Product.Name
         },
         CreatedAt = x.CreatedAt,
-        UpdatedAt = x.UpdatedAt
+        UpdatedAt = x.UpdatedAt,
+        Replies = x.Replies
+            .OrderBy(r => r.CreatedAt)
+            .Select(r => new ReviewReplyDto
+            {
+                Id = r.Id,
+                Text = r.Text,
+                IsFromSeller = r.IsFromSeller,
+                Author = new UserSummaryDto
+                {
+                    Id = r.UserAccount.Id,
+                    Username = r.UserAccount.Username,
+                    AvatarKey = r.UserAccount.AvatarKey
+                },
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt
+            })
+            .ToList()
     };
 }

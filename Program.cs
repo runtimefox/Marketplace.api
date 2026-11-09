@@ -183,6 +183,7 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderExpirationService, OrderExpirationService>();
 builder.Services.AddHostedService<OrderExpirationWorker>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IReviewReplyService, ReviewReplyService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
@@ -267,6 +268,7 @@ builder.Services
     .AddTypeExtension<PaymentMutations>()
     .AddTypeExtension<ReviewQueries>()
     .AddTypeExtension<ReviewMutations>()
+    .AddTypeExtension<ReviewReplyMutations>()
     .AddTypeExtension<ProductQueries>()
     .AddTypeExtension<ProductMutations>()
     .AddTypeExtension<SellerQueries>()

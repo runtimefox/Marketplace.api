@@ -463,6 +463,48 @@ namespace MyApi.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyApi.Models.Entities.ReviewReply", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("Id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreatedAt");
+
+                    b.Property<bool>("IsFromSeller")
+                        .HasColumnType("boolean")
+                        .HasColumnName("IsFromSeller");
+
+                    b.Property<Guid>("ReviewId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ReviewId");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("Text");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("UpdatedAt");
+
+                    b.Property<Guid>("UserAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("UserAccountId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserAccountId");
+
+                    b.HasIndex("ReviewId", "CreatedAt");
+
+                    b.ToTable("ReviewReplies");
+                });
+
             modelBuilder.Entity("MyApi.Models.Entities.Seller", b =>
                 {
                     b.Property<Guid>("Id")
@@ -769,6 +811,25 @@ namespace MyApi.Migrations
                     b.Navigation("UserAccount");
                 });
 
+            modelBuilder.Entity("MyApi.Models.Entities.ReviewReply", b =>
+                {
+                    b.HasOne("MyApi.Models.Entities.Review", "Review")
+                        .WithMany("Replies")
+                        .HasForeignKey("ReviewId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyApi.Models.Entities.UserAccount", "UserAccount")
+                        .WithMany()
+                        .HasForeignKey("UserAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Review");
+
+                    b.Navigation("UserAccount");
+                });
+
             modelBuilder.Entity("MyApi.Models.Entities.SellerMember", b =>
                 {
                     b.HasOne("MyApi.Models.Entities.Seller", "Seller")
@@ -808,6 +869,11 @@ namespace MyApi.Migrations
                     b.Navigation("Images");
 
                     b.Navigation("Reviews");
+                });
+
+            modelBuilder.Entity("MyApi.Models.Entities.Review", b =>
+                {
+                    b.Navigation("Replies");
                 });
 
             modelBuilder.Entity("MyApi.Models.Entities.Seller", b =>
