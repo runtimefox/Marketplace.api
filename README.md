@@ -79,6 +79,13 @@ The app does not start without `Jwt:Key`, `Stripe:SecretKey` and `Stripe:Webhook
 stripe listen --events payment_intent.succeeded,payment_intent.canceled --forward-to http://localhost:5086/api/payments/stripe/webhook
 ```
 
+Or run the Stripe CLI in Docker next to PostgreSQL and MinIO, so it keeps running without a terminal and starts again with Docker. It uses `STRIPE_SECRET_KEY` from `.env` (the same `sk_test_...` as `Stripe:SecretKey`, no `stripe login` needed) and forwards to the API on the host at `:5086`; set `STRIPE_FORWARD_TO` to change the target (for the `app` profile: `http://api:8080/api/payments/stripe/webhook`). Read the `whsec_...` secret from the logs:
+
+```bash
+docker compose --profile stripe up -d stripe-cli
+docker logs myapi-stripe-cli
+```
+
 ### 3. Apply migrations and run
 
 ```bash
