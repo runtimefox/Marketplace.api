@@ -47,6 +47,22 @@ services:
         mc mb --ignore-existing "local/$$STORAGE_BUCKET" &&
         mc anonymous set download "local/$$STORAGE_BUCKET"
 
+  stripe-cli:
+    profiles: [stripe]
+    image: stripe/stripe-cli:v1.55.3
+    container_name: myapi-stripe-cli
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      STRIPE_API_KEY: ${STRIPE_SECRET_KEY:-}
+    command:
+      - listen
+      - --events
+      - payment_intent.succeeded,payment_intent.canceled
+      - --forward-to
+      - ${STRIPE_FORWARD_TO:-http://host.docker.internal:5086/api/payments/stripe/webhook}
+
   migrations:
     profiles: [app]
     build:
