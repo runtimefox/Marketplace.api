@@ -37,6 +37,10 @@ public class Review
     [Column("UpdatedAt")]
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    private readonly List<ReviewReply> _replies = [];
+
+    public IReadOnlyCollection<ReviewReply> Replies => _replies;
+
     private Review()
     {
     }
