@@ -12,7 +12,7 @@ Buyers browse the catalog, fill a cart, place orders and leave reviews; sellers 
 - **Catalog** — products and categories with paging, filtering and sorting; full-text product search by name and description
 - **Cart and orders** — checkout with a delivery address creates one order per seller, `CREATED → PAID → SHIPPED → DELIVERED` status flow, cancellation returns stock, optimistic concurrency against overselling
 - **Payments** — Stripe PaymentIntents: one payment covers all orders of a checkout, orders become paid only after a signed Stripe webhook
-- **Reviews** — only buyers with a delivered order can review; product and seller ratings are recalculated automatically
+- **Reviews** — only buyers with a delivered order can review; the review author and the shop can reply under a review; product and seller ratings are recalculated automatically
 - **Images** — product galleries (up to 10 photos), shop logos and user avatars; uploads are validated, converted to WebP in two sizes and stored in S3-compatible storage
 
 ## Tech stack
