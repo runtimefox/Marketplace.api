@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OrderItem> OrderItems { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<Review> Reviews { get; set; }
+    public DbSet<ReviewReply> ReviewReplies { get; set; }
     public DbSet<ProductImage> ProductImages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -244,5 +245,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .ToTable(t => t.HasCheckConstraint(
                 "CK_Reviews_Rating",
                 $"\"Rating\" >= {Review.MinRating} AND \"Rating\" <= {Review.MaxRating}"));
+
+        modelBuilder.Entity<ReviewReply>()
+            .HasOne(x => x.Review)
+            .WithMany(x => x.Replies)
+            .HasForeignKey(x => x.ReviewId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ReviewReply>()
+            .HasOne(x => x.UserAccount)
+            .WithMany()
+            .HasForeignKey(x => x.UserAccountId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ReviewReply>()
+            .HasIndex(x => new { x.ReviewId, x.CreatedAt });
     }
 }
